@@ -343,10 +343,27 @@ Notes:
 >    tabbed/nav structure on the dashboard so trading is front and center, and
 >    a visible Register entry point (register page already exists at `/register`;
 >    the user did not see it).
+> 5. **Remove/hide backend-health diagnostics from the user dashboard.** The
+>    "Platform" stat (shows `Degraded` because Redis is absent in the sandbox)
+>    and arguably the "Data mode" stat are dev-facing noise, not user features:
+>    `dashboard/page.tsx` calls `GET /api/v1/health` and renders DB/Redis status
+>    (`dashboard/page.tsx:47-52`), and "Data mode" renders `feedInfo` from the
+>    quotes card. Recommended: drop the Platform stat entirely, or gate it (and
+>    Data mode) behind `ENVIRONMENT=development` so end users only see trading
+>    info. `LIVE`/`Mock` labels on the quotes card itself are fine to keep.
+> 6. **Autotrade option in trading Settings.** The user wants an **"autotrade"**
+>    toggle/feature alongside the paper/live switch in Settings. Define scope:
+>    at minimum a per-portfolio `autotrade_enabled` flag surfaced in Settings +
+>    the dashboard, ideally wired to the strategies feature (item 1) so
+>    auto-generated orders run through the chosen execution mode (paper/live).
+>    The paper matcher (`paper_engine.run_paper_matcher`) is the natural hook
+>    for auto-placement; a manual/automated switch is needed — the user must be
+>    able to turn autotrade on/off per portfolio.
 >
 > Suggested execution order: Settings page + header link first (cheap, backend
-> already done), then Strategies feature (full stack), then broker token store.
-> Update this file + README in the same commit as always.
+> already done), then Strategies feature (full stack), then broker token store
+> + autotrade flag, then dashboard diagnostic cleanup. Update this file +
+> README in the same commit as always.
 
 **Phase 4 remaining open items** (from the original roadmap, still valid but
 lower priority than the user's new requests above), in suggested order:
@@ -361,7 +378,8 @@ lower priority than the user's new requests above), in suggested order:
 5. **Live order-status sync automation** — the live `refresh` endpoint exists
    but nothing polls it yet; a background job or WebSocket push could keep
    live orders in sync without manual refresh.
-6. Later phases from README: strategies, backtesting, news, AI, notifications.
+6. Later phases from README: backtesting, news, AI, notifications
+   (strategies + autotrade are now promoted to the user-requested list above).
 
 If the user instead asks for a different feature, treat that as the next step
 and update this file accordingly.

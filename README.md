@@ -243,7 +243,10 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   `LIVE_EXECUTION_ENABLED=true` + a live portfolio), but live order-status
   sync is manual (`POST .../orders/{id}/refresh`) — no background sync yet.
 - Strategies, backtesting, news, AI
-  and notifications are the subject of later phases.
+  and notifications are the subject of later phases. The user has also
+  requested a per-portfolio **strategies bar** (manually add/edit strategies)
+  and an **autotrade** toggle in Settings so strategies can auto-place orders
+  through the chosen execution mode (paper/live); see `HANDOVER.md` "Next step".
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).
 
