@@ -9,6 +9,24 @@
 > new phase, new endpoint, config change, schema change), update the relevant
 > section (Current status, Done, Next) and commit it in the same change.
 
+## Change workflow (mandatory for every agent)
+
+Follow this on **every** task, not just at phase boundaries:
+
+1. Make the code change.
+2. Verify: run the backend + frontend checks listed in "Verification commands".
+3. **Update HANDOVER.md** (and README.md when user-facing) if anything changed:
+   Current status, What has been done, Next step, or this section. If behavior,
+   config, schema, API, or file layout changed, this file MUST be touched.
+4. Commit code + docs **together** in one commit, then push to GitHub.
+
+> The commit is only half the job: a commit without its HANDOVER update is a
+> clean record of a stale document. Never push a behavior change without
+> updating this file in the same commit.
+>
+> Commit often (per change, not per phase) — a phase spans many sessions, and
+> the handover must reflect reality at every point, not just at "phase done".
+
 ## What this project is
 
 Tradeork is a **multi-user SaaS paper-trading platform for Indian markets**
