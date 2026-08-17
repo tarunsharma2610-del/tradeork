@@ -42,8 +42,16 @@ class Settings(BaseSettings):
     PAPER_MATCHER_ENABLED: bool = True
     PAPER_MATCHER_INTERVAL: float = 5.0
 
-    # Upstox v2 API (live provider). Tokens are long-lived app access tokens;
-    # OAuth refresh flow is out of scope for now.
+    # Broker execution adapter (LIVE side of PAPER/LIVE separation).
+    # "mock"   -> in-process simulator, is_mock=true (default)
+    # "upstox" -> live Upstox v2 order placement (requires credentials below)
+    # The paper engine never calls a broker; this seam is for a future live
+    # execution mode and is currently exercised through tests only.
+    BROKER_ADAPTER: str = "mock"
+    UPSTOX_BROKER_PRODUCT: str = "D"
+
+    # Upstox v2 API (live provider + broker). Tokens are long-lived app access
+    # tokens; OAuth refresh flow is out of scope for now.
     UPSTOX_API_KEY: str = ""
     UPSTOX_ACCESS_TOKEN: str = ""
     UPSTOX_BASE_URL: str = "https://api.upstox.com/v2"
@@ -55,6 +63,14 @@ class Settings(BaseSettings):
         if provider not in ("mock", "upstox"):
             raise ValueError("MARKET_DATA_PROVIDER must be 'mock' or 'upstox'")
         return provider
+
+    @field_validator("BROKER_ADAPTER")
+    @classmethod
+    def _validate_broker_adapter(cls, v: str) -> str:
+        adapter = v.lower()
+        if adapter not in ("mock", "upstox"):
+            raise ValueError("BROKER_ADAPTER must be 'mock' or 'upstox'")
+        return adapter
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

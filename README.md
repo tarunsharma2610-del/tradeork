@@ -4,7 +4,8 @@ Multi-user SaaS paper-trading platform for Indian markets (NSE, BSE, MCX).
 Architected so the trading engine can later support real broker execution
 (Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.
 
-**Status: Phase 3 — Paper-trading execution engine (orders, positions, P&L).**
+**Status: Phase 4 — Live execution adapter (`BrokerAdapter` interface +
+Upstox/Mock adapters). Paper engine remains the source of truth.**
 
 ## What is implemented
 
@@ -26,6 +27,13 @@ Architected so the trading engine can later support real broker execution
     position tracking (signed quantity, VWAP average price, realized/unrealized
     P&L), and a portfolio summary (cash, equity, P&L). Execution is strictly
     paper-only — no broker order APIs are invoked.
+  - **Broker execution adapter** (`BrokerAdapter` interface with mock and
+    Upstox implementations): `place_order`/`cancel_order`/`get_order_status`
+    against Upstox v2 order endpoints, selected by `BROKER_ADAPTER` config
+    (safe fallback to the labelled mock adapter). This is the LIVE side of the
+    PAPER/LIVE separation: the paper engine never calls a broker, and the
+    adapter is currently exercised only through tests (a live execution path
+    is the next phase).
   - Instruments: reference catalog (NSE/BSE/MCX, equity/futures/options) with
     search (symbol/name, exchange, instrument type) and natural-key dedupe
   - Market data: provider abstraction + clearly-labelled mock provider
@@ -75,7 +83,8 @@ Architected so the trading engine can later support real broker execution
 │   │   ├── models/         # SQLAlchemy models
 │   │   ├── schemas/        # Pydantic request/response models
 │   │   ├── services/       # business logic (portfolios, instruments, market data,
-│   │   │                   #   upstox provider, provider factory, quote stream)
+│   │   │                   #   upstox provider, provider factory, quote stream,
+│   │   │                   #   broker adapters: broker.py, upstox_broker.py, broker_factory.py)
 │   │   └── repositories/   # data access
 │   └── tests/
 ├── frontend/
@@ -225,7 +234,10 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   book, slippage, or fees model yet.
 - Short selling is allowed without a margin/leverage check (by design for
   paper trading).
-- Strategies, backtesting, broker adapters, news, AI
+- The `BrokerAdapter` (Upstox order placement) is implemented and tested but
+  **not wired to any live execution path yet**; the paper engine remains the
+  only execution path and never calls a broker.
+- Strategies, backtesting, live broker execution wiring, news, AI
   and notifications are the subject of later phases.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).

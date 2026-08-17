@@ -55,7 +55,7 @@ order APIs.
 │   │   ├── domain/              # enums (OrderSide/Type/Status, etc.)
 │   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade
 │   │   ├── schemas/             # request/response Pydantic models
-│   │   ├── services/            # auth, users, portfolios, paper_engine, market_data/upstox/quote_stream, audit
+│   │   ├── services/            # auth, users, portfolios, paper_engine, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
 │   │   └── repositories/        # data-access layer per entity
 │   └── tests/                   # pytest + ruff (74 tests, all green)
 ├── frontend/
@@ -70,9 +70,10 @@ order APIs.
 
 ## Current status
 
-**Phase: 3 — Paper-trading execution engine (orders, positions, P&L). DONE.**
+**Phase: 4 — Live execution adapter (item 1: `BrokerAdapter` interface +
+Upstox/Mock adapters + factory). DONE for item 1; paper engine untouched.**
 
-All backend and frontend checks pass. The last commit is on `main`.
+All backend checks pass. The last commit is on `main`.
 
 ## How to continue WITHOUT burning your token budget
 
@@ -89,7 +90,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 
 | Your task | Files to read (in order) |
 |---|---|
-| Continue Phase 4 (broker adapter) | `HANDOVER.md` → `backend/app/services/paper_engine.py` → `backend/app/core/config.py` → `backend/app/services/provider_factory.py` → `backend/app/services/upstox.py` → `backend/tests/test_paper_engine.py` |
+| Continue Phase 4 (broker adapter) | `HANDOVER.md` → `backend/app/services/broker.py` → `backend/app/services/upstox_broker.py` → `backend/app/services/broker_factory.py` → `backend/app/core/config.py` → `backend/tests/test_broker.py` |
 | Understand the paper engine | `backend/app/services/paper_engine.py` → `backend/app/domain/enums.py` → `backend/app/models/order.py` + `position.py` + `trade.py` → `backend/tests/test_paper_engine.py` |
 | Add/change an API endpoint | `backend/app/api/v1/endpoints/*.py` (the matching one) → `backend/app/api/v1/router.py` → `backend/app/schemas/*.py` → matching test in `backend/tests/` |
 | Work on frontend | `frontend/src/lib/api.ts` → `frontend/src/app/dashboard/page.tsx` → the relevant `frontend/src/components/*.tsx` → `frontend/src/lib/use-market-stream.ts` |
@@ -102,6 +103,9 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 **Backend services** (`backend/app/services/`)
 - `paper_engine.py` (423) — THE core: order placement, fills, matcher, positions, summary. Read for any trading change.
 - `market_data.py` (188) — quote fetching/caching via provider abstraction.
+- `broker.py` (~110) — `BrokerAdapter` ABC + DTOs + `MockBrokerAdapter` (LIVE execution seam).
+- `upstox_broker.py` (~150) — Upstox v2 order placement adapter (`place`/`cancel`/`status`).
+- `broker_factory.py` (~25) — picks mock vs upstox from `BROKER_ADAPTER`.
 - `auth.py` (137) — register/login/refresh/logout logic.
 - `quote_stream.py` (136) — WebSocket quote streaming.
 - `upstox.py` (113) — Upstox REST provider (live quotes).
@@ -189,13 +193,33 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
   frontend typecheck/lint/build green; migration up/down/up + smoke flow
   verified on SQLite.
 
+### Phase 4 — Live execution adapter: `BrokerAdapter` interface (item 1)
+- New `app/services/broker.py`: `BrokerAdapter` ABC (place/cancel/status),
+  `BrokerOrderRequest`/`BrokerOrderResult` DTOs, `BrokerAPIError`,
+  `MockBrokerAdapter` (`is_mock=true`; MARKET fills, LIMIT rests pending).
+- New `app/services/upstox_broker.py`: `UpstoxBrokerAdapter`
+  (`is_mock=false`) calling Upstox v2 `/order/place`, `/order/cancel`,
+  `/order/details`; status mapped to paper vocabulary
+  (`complete`→`filled`). LIMIT orders require a limit price.
+- New `app/services/broker_factory.py`: `get_broker()` selects mock vs upstox
+  from `BROKER_ADAPTER`, failing safe to mock when Upstox credentials are
+  missing (mirrors `provider_factory`).
+- Config: `BROKER_ADAPTER` (default `mock`), `UPSTOX_BROKER_PRODUCT`
+  (default `D`); validator added. `.env.example` updated.
+- **Strict PAPER/LIVE separation preserved**: `paper_engine.py` is untouched
+  and never calls a broker. The adapter is the execution seam for a future
+  live mode; it is currently exercised only via tests.
+- Tests: 19 new in `tests/test_broker.py` (mock adapter lifecycle, Upstox
+  payloads/parsing/error paths via patched `httpx.AsyncClient` verbs, factory
+  selection/fallback), **93 total passing**; ruff clean; migrations OK.
+
 ## Verification commands
 
 ```bash
 # Backend (from backend/)
 cd backend
 ruff check app tests
-python3 -m pytest -q          # expect 74 passed
+python3 -m pytest -q          # expect 93 passed
 # migration up/down/up on SQLite:
 DATABASE_URL=sqlite:////tmp/t.db alembic upgrade head && \
 DATABASE_URL=sqlite:////tmp/t.db alembic downgrade base && \
@@ -213,18 +237,20 @@ positions/summary/orders reflect cash, position, P&L.
 
 ## Next step
 
-**Phase 4 (proposed): Live execution adapter — wire the paper engine to a real
-broker.** Open items and natural candidates, in suggested order:
+**Phase 4: Live execution adapter.** Item 1 (`BrokerAdapter` interface +
+Upstox/Mock adapters + factory) is done and merged. Remaining open items, in
+suggested order:
 
-1. **Upstox order placement adapter** behind a `BrokerAdapter` interface
-   (place/cancel/status) with the paper engine staying the source of truth for
-   the user — i.e. keep PAPER/LIVE strictly separated.
+1. **Wire a live execution path** onto `BrokerAdapter` (e.g. a portfolio-level
+   LIVE mode/endpoint) so real orders can flow to Upstox — the paper engine
+   stays the source of truth; the adapter is never called from it.
 2. **Upstox OAuth token refresh** (currently expects long-lived token).
 3. **Order book / slippage / brokerage-fee model** for paper fills (currently
    fills at last price with no fees).
 4. **Margin/leverage checks** for shorts and leveraged products.
 5. Real **instrument-master sync** from a broker/exchange feed (catalog is
-   currently static seeded data).
+   currently static seeded data); Upstox order placement needs account-scoped
+   instrument tokens resolved from it.
 6. Later phases from README: strategies, backtesting, news, AI, notifications.
 
 If the user instead asks for a different feature, treat that as the next step
