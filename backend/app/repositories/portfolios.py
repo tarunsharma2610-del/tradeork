@@ -45,6 +45,7 @@ class PortfolioRepository(BaseRepository[Portfolio]):
         description: str | None,
         initial_capital: Decimal,
         currency: str,
+        execution_mode: str = "paper",
     ) -> Portfolio:
         portfolio = Portfolio(
             user_id=user_id,
@@ -53,6 +54,7 @@ class PortfolioRepository(BaseRepository[Portfolio]):
             initial_capital=initial_capital,
             cash=initial_capital,
             currency=currency,
+            execution_mode=execution_mode,
         )
         self.db.add(portfolio)
         self.db.flush()

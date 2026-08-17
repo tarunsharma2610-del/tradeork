@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     BROKER_ADAPTER: str = "mock"
     UPSTOX_BROKER_PRODUCT: str = "D"
 
+    # Master switch for LIVE portfolios. When False (default) portfolios stay
+    # paper-only and any attempt to place orders on a live portfolio is
+    # rejected, even if a broker adapter is configured.
+    LIVE_EXECUTION_ENABLED: bool = False
+
     # Upstox v2 API (live provider + broker). Tokens are long-lived app access
     # tokens; OAuth refresh flow is out of scope for now.
     UPSTOX_API_KEY: str = ""

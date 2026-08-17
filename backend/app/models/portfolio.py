@@ -43,6 +43,12 @@ class Portfolio(Base):
     status: Mapped[str] = mapped_column(
         String(20), default="active", nullable=False
     )
+    # "paper" (simulated by the paper engine) or "live" (routed to a real
+    # broker via a BrokerAdapter). Defaults to paper; the paper engine is the
+    # source of truth for the user's displayed book in both modes.
+    execution_mode: Mapped[str] = mapped_column(
+        String(8), default="paper", nullable=False, server_default="paper"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -55,7 +55,7 @@ order APIs.
 │   │   ├── domain/              # enums (OrderSide/Type/Status, etc.)
 │   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade
 │   │   ├── schemas/             # request/response Pydantic models
-│   │   ├── services/            # auth, users, portfolios, paper_engine, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
+│   │   ├── services/            # auth, users, portfolios, paper_engine, live_execution, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
 │   │   └── repositories/        # data-access layer per entity
 │   └── tests/                   # pytest + ruff (74 tests, all green)
 ├── frontend/
@@ -70,10 +70,11 @@ order APIs.
 
 ## Current status
 
-**Phase: 4 — Live execution adapter (item 1: `BrokerAdapter` interface +
-Upstox/Mock adapters + factory). DONE for item 1; paper engine untouched.**
+**Phase: 4 — Live execution adapter. Item 1 (BrokerAdapter interface +
+Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
+adapter) are DONE. Paper engine remains untouched as the source of truth.**
 
-All backend checks pass. The last commit is on `main`.
+All backend and frontend checks pass. The last commit is on `main`.
 
 ## How to continue WITHOUT burning your token budget
 
@@ -90,7 +91,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 
 | Your task | Files to read (in order) |
 |---|---|
-| Continue Phase 4 (broker adapter) | `HANDOVER.md` → `backend/app/services/broker.py` → `backend/app/services/upstox_broker.py` → `backend/app/services/broker_factory.py` → `backend/app/core/config.py` → `backend/tests/test_broker.py` |
+| Continue Phase 4 (broker adapter) | `HANDOVER.md` → `backend/app/services/broker.py` → `backend/app/services/upstox_broker.py` → `backend/app/services/broker_factory.py` → `backend/app/services/live_execution.py` → `backend/app/api/v1/endpoints/trading.py` → `backend/tests/test_live_execution.py` |
 | Understand the paper engine | `backend/app/services/paper_engine.py` → `backend/app/domain/enums.py` → `backend/app/models/order.py` + `position.py` + `trade.py` → `backend/tests/test_paper_engine.py` |
 | Add/change an API endpoint | `backend/app/api/v1/endpoints/*.py` (the matching one) → `backend/app/api/v1/router.py` → `backend/app/schemas/*.py` → matching test in `backend/tests/` |
 | Work on frontend | `frontend/src/lib/api.ts` → `frontend/src/app/dashboard/page.tsx` → the relevant `frontend/src/components/*.tsx` → `frontend/src/lib/use-market-stream.ts` |
@@ -102,6 +103,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 
 **Backend services** (`backend/app/services/`)
 - `paper_engine.py` (423) — THE core: order placement, fills, matcher, positions, summary. Read for any trading change.
+- `live_execution.py` (~230) — LIVE path: routes orders to a `BrokerAdapter`, books broker fills into the paper ledger.
 - `market_data.py` (188) — quote fetching/caching via provider abstraction.
 - `broker.py` (~110) — `BrokerAdapter` ABC + DTOs + `MockBrokerAdapter` (LIVE execution seam).
 - `upstox_broker.py` (~150) — Upstox v2 order placement adapter (`place`/`cancel`/`status`).
@@ -113,7 +115,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 - `portfolios.py` (79), `instruments.py` (38), `users.py` (20), `audit.py` (36).
 
 **Backend API** (`backend/app/api/v1/endpoints/`)
-- `trading.py` (72) — Phase 3 endpoints (orders/positions/summary).
+- `trading.py` (115) — Phase 3+4 endpoints (orders/positions/summary; dispatch by portfolio execution mode).
 - `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34).
 - `router.py` (20) — registers all routers.
 
@@ -213,13 +215,35 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
   payloads/parsing/error paths via patched `httpx.AsyncClient` verbs, factory
   selection/fallback), **93 total passing**; ruff clean; migrations OK.
 
+### Phase 4 — Live execution path wired to the broker (item 2)
+- New `ExecutionMode` enum (`paper`/`live`); config `LIVE_EXECUTION_ENABLED`
+  (default false) is the master switch for live portfolios.
+- Migration `0004`: `portfolios.execution_mode` (default `paper`),
+  `orders.execution_mode` (default `paper`), `orders.broker_order_id` —
+  SQLite-compatible.
+- Portfolio create/update accepts `execution_mode`; creating/switching a live
+  portfolio is rejected unless `LIVE_EXECUTION_ENABLED=true`.
+- New `app/services/live_execution.py`: `LiveExecutionService` routes
+  place/cancel/refresh to a `BrokerAdapter` and **books broker-reported fills
+  into the paper ledger** (cash, positions, trades) so the user's displayed
+  book stays the source of truth. Rejects live orders when the resolved
+  broker adapter is `is_mock=true`.
+- `trading.py` dispatches by `portfolio.execution_mode` for place/cancel;
+  live-only `POST /portfolios/{id}/orders/{order_id}/refresh` syncs broker
+  state. Paper matcher now skips live orders.
+- `MockBrokerAdapter` gained a `fill_price` so MARKET fills can be booked.
+- Frontend `api.ts` types extended with `execution_mode`/`broker_order_id`.
+- Tests: 13 new in `tests/test_live_execution.py` (service + API flows,
+  ledger booking, gates, matcher skip, ownership), **106 total passing**;
+  ruff clean; migration up/down/up OK; frontend typecheck/lint/build green.
+
 ## Verification commands
 
 ```bash
 # Backend (from backend/)
 cd backend
 ruff check app tests
-python3 -m pytest -q          # expect 93 passed
+python3 -m pytest -q          # expect 106 passed
 # migration up/down/up on SQLite:
 DATABASE_URL=sqlite:////tmp/t.db alembic upgrade head && \
 DATABASE_URL=sqlite:////tmp/t.db alembic downgrade base && \
@@ -237,20 +261,21 @@ positions/summary/orders reflect cash, position, P&L.
 
 ## Next step
 
-**Phase 4: Live execution adapter.** Item 1 (`BrokerAdapter` interface +
-Upstox/Mock adapters + factory) is done and merged. Remaining open items, in
-suggested order:
+**Phase 4: Live execution adapter.** Items 1–2 done: `BrokerAdapter` +
+Upstox/Mock + factory, and a portfolio-level LIVE mode wired to it (orders
+route through the adapter, fills mirror into the paper ledger). Remaining open
+items, in suggested order:
 
-1. **Wire a live execution path** onto `BrokerAdapter` (e.g. a portfolio-level
-   LIVE mode/endpoint) so real orders can flow to Upstox — the paper engine
-   stays the source of truth; the adapter is never called from it.
-2. **Upstox OAuth token refresh** (currently expects long-lived token).
-3. **Order book / slippage / brokerage-fee model** for paper fills (currently
+1. **Upstox OAuth token refresh** (currently expects long-lived token).
+2. **Order book / slippage / brokerage-fee model** for paper fills (currently
    fills at last price with no fees).
-4. **Margin/leverage checks** for shorts and leveraged products.
-5. Real **instrument-master sync** from a broker/exchange feed (catalog is
+3. **Margin/leverage checks** for shorts and leveraged products.
+4. Real **instrument-master sync** from a broker/exchange feed (catalog is
    currently static seeded data); Upstox order placement needs account-scoped
    instrument tokens resolved from it.
+5. **Live order-status sync automation** — the live `refresh` endpoint exists
+   but nothing polls it yet; a background job or WebSocket push could keep
+   live orders in sync without manual refresh.
 6. Later phases from README: strategies, backtesting, news, AI, notifications.
 
 If the user instead asks for a different feature, treat that as the next step
@@ -259,6 +284,10 @@ and update this file accordingly.
 ## Conventions & gotchas
 
 - Strict PAPER/LIVE separation: paper engine must never call broker order APIs.
+- Live execution is gated by `LIVE_EXECUTION_ENABLED` (default false) AND a
+  non-mock broker adapter; a live portfolio/order is rejected otherwise.
+- Live fills are mirrored into the paper ledger (cash/positions/trades) so the
+  displayed book stays the source of truth for the user.
 - Money uses `Decimal` (precision 18, scale 2), never floats, in the backend.
 - Tenant ownership enforced in service layer via `current_user.id` — never trust
   portfolio ids from the request body alone.

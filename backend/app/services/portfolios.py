@@ -3,6 +3,8 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
+from app.domain.enums import ExecutionMode
 from app.models.portfolio import Portfolio
 from app.repositories.portfolios import PortfolioRepository
 from app.schemas.portfolio import PortfolioCreate, PortfolioUpdate
@@ -19,7 +21,19 @@ class PortfolioService:
         self.db = db
         self.repo = PortfolioRepository(db)
 
+    @staticmethod
+    def _assert_live_allowed(mode: ExecutionMode) -> None:
+        if mode == ExecutionMode.LIVE and not settings.LIVE_EXECUTION_ENABLED:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    "Live execution is disabled. Set LIVE_EXECUTION_ENABLED=true "
+                    "to create or switch portfolios to live mode."
+                ),
+            )
+
     def create(self, user_id: UUID, data: PortfolioCreate) -> Portfolio:
+        self._assert_live_allowed(data.execution_mode)
         if self.repo.get_by_name(user_id, data.name) is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -31,6 +45,7 @@ class PortfolioService:
             description=data.description,
             initial_capital=data.initial_capital,
             currency=data.currency,
+            execution_mode=data.execution_mode.value,
         )
         self.db.commit()
         self.db.refresh(portfolio)
@@ -68,6 +83,9 @@ class PortfolioService:
             portfolio.initial_capital = data.initial_capital
         if data.status is not None:
             portfolio.status = data.status.value
+        if data.execution_mode is not None:
+            self._assert_live_allowed(data.execution_mode)
+            portfolio.execution_mode = data.execution_mode.value
         self.db.add(portfolio)
         self.db.commit()
         self.db.refresh(portfolio)

@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.core.security import utcnow
-from app.domain.enums import OrderStatus, OrderType
+from app.domain.enums import ExecutionMode, OrderStatus, OrderType
 from app.models.instrument import Instrument
 from app.models.order import Order
 from app.models.portfolio import Portfolio
@@ -393,10 +393,16 @@ class PaperOrderEngine:
     # Background limit-order matching
     # ------------------------------------------------------------------ #
     async def match_pending_orders(self) -> int:
-        """Fill any pending orders that are now marketable. Returns count filled."""
+        """Fill any pending orders that are now marketable. Returns count filled.
+
+        Only PAPER orders are matched here — live orders are the broker's
+        responsibility and are synced through ``LiveExecutionService``.
+        """
         pending = self.orders.list_pending()
         filled = 0
         for order in pending:
+            if order.execution_mode == ExecutionMode.LIVE.value:
+                continue
             portfolio = self.db.get(Portfolio, order.portfolio_id)
             if portfolio is None or portfolio.status != "active":
                 continue

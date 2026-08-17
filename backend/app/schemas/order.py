@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from app.domain.enums import OrderSide, OrderStatus, OrderType
+from app.domain.enums import ExecutionMode, OrderSide, OrderStatus, OrderType
 
 
 class OrderCreate(BaseModel):
@@ -37,6 +37,8 @@ class OrderRead(BaseModel):
     order_type: OrderType
     quantity: int
     limit_price: Decimal | None
+    execution_mode: ExecutionMode
+    broker_order_id: str | None
     status: OrderStatus
     filled_quantity: int
     avg_fill_price: Decimal | None

@@ -31,6 +31,18 @@ class PortfolioStatus(StrEnum):
     ARCHIVED = "archived"
 
 
+class ExecutionMode(StrEnum):
+    """How a portfolio's orders are executed.
+
+    PAPER — simulated by the paper engine (always safe, default).
+    LIVE  — routed to a real broker through a ``BrokerAdapter``; the paper
+            ledger stays the source of truth for the user's displayed book.
+    """
+
+    PAPER = "paper"
+    LIVE = "live"
+
+
 class OrderSide(StrEnum):
     BUY = "BUY"
     SELL = "SELL"

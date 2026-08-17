@@ -4,8 +4,8 @@ Multi-user SaaS paper-trading platform for Indian markets (NSE, BSE, MCX).
 Architected so the trading engine can later support real broker execution
 (Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.
 
-**Status: Phase 4 — Live execution adapter (`BrokerAdapter` interface +
-Upstox/Mock adapters). Paper engine remains the source of truth.**
+**Status: Phase 4 — Live execution adapter + portfolio LIVE mode. Paper engine
+remains the source of truth.**
 
 ## What is implemented
 
@@ -31,9 +31,13 @@ Upstox/Mock adapters). Paper engine remains the source of truth.**
     Upstox implementations): `place_order`/`cancel_order`/`get_order_status`
     against Upstox v2 order endpoints, selected by `BROKER_ADAPTER` config
     (safe fallback to the labelled mock adapter). This is the LIVE side of the
-    PAPER/LIVE separation: the paper engine never calls a broker, and the
-    adapter is currently exercised only through tests (a live execution path
-    is the next phase).
+    PAPER/LIVE separation: the paper engine never calls a broker.
+  - **Portfolio LIVE mode**: portfolios can be created/switched to
+    `execution_mode=live` (gated by `LIVE_EXECUTION_ENABLED`). Orders on a
+    live portfolio are routed through the broker adapter and the
+    broker-reported fills are mirrored into the paper ledger, so the user's
+    displayed book stays the source of truth. A live-only
+    `POST /portfolios/{id}/orders/{order_id}/refresh` syncs broker state.
   - Instruments: reference catalog (NSE/BSE/MCX, equity/futures/options) with
     search (symbol/name, exchange, instrument type) and natural-key dedupe
   - Market data: provider abstraction + clearly-labelled mock provider
@@ -84,7 +88,8 @@ Upstox/Mock adapters). Paper engine remains the source of truth.**
 │   │   ├── schemas/        # Pydantic request/response models
 │   │   ├── services/       # business logic (portfolios, instruments, market data,
 │   │   │                   #   upstox provider, provider factory, quote stream,
-│   │   │                   #   broker adapters: broker.py, upstox_broker.py, broker_factory.py)
+│   │   │                   #   broker adapters + live_execution: broker.py, upstox_broker.py,
+│   │   │                   #   broker_factory.py, live_execution.py)
 │   │   └── repositories/   # data access
 │   └── tests/
 ├── frontend/
@@ -234,10 +239,10 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   book, slippage, or fees model yet.
 - Short selling is allowed without a margin/leverage check (by design for
   paper trading).
-- The `BrokerAdapter` (Upstox order placement) is implemented and tested but
-  **not wired to any live execution path yet**; the paper engine remains the
-  only execution path and never calls a broker.
-- Strategies, backtesting, live broker execution wiring, news, AI
+- Live order placement is wired (`BROKER_ADAPTER=upstox` + credentials +
+  `LIVE_EXECUTION_ENABLED=true` + a live portfolio), but live order-status
+  sync is manual (`POST .../orders/{id}/refresh`) — no background sync yet.
+- Strategies, backtesting, news, AI
   and notifications are the subject of later phases.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).

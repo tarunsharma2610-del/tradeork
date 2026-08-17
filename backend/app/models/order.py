@@ -44,6 +44,12 @@ class Order(Base):
     order_type: Mapped[str] = mapped_column(String(8), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     limit_price: Mapped[Decimal | None] = mapped_column(Numeric(18, 2))
+    # "paper" -> simulated by the paper engine; "live" -> routed to a broker
+    # adapter. Only live orders carry a broker_order_id.
+    execution_mode: Mapped[str] = mapped_column(
+        String(8), default="paper", nullable=False, server_default="paper"
+    )
+    broker_order_id: Mapped[str | None] = mapped_column(String(64))
     status: Mapped[str] = mapped_column(
         String(20), default="pending", nullable=False, index=True
     )

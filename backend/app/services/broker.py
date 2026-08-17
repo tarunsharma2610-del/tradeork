@@ -76,16 +76,18 @@ class MockBrokerAdapter(BrokerAdapter):
     """Deterministic in-process broker simulator.
 
     ``is_mock = True`` — nothing leaves this process. MARKET orders fill
-    immediately; LIMIT orders rest as ``pending`` until explicitly cancelled
-    (there is no market feed to cross them). Exists so the live-execution
-    seam can be exercised end-to-end without touching a real broker.
+    immediately at ``fill_price``; LIMIT orders rest as ``pending`` until
+    explicitly cancelled (there is no market feed to cross them). Exists so
+    the live-execution seam can be exercised end-to-end without touching a
+    real broker.
     """
 
     name = "mock"
     is_mock = True
 
-    def __init__(self) -> None:
+    def __init__(self, fill_price: Decimal = Decimal("0.01")) -> None:
         self._orders: dict[str, BrokerOrderResult] = {}
+        self.fill_price = fill_price
 
     def _record(self, result: BrokerOrderResult) -> None:
         self._orders[result.broker_order_id] = result
@@ -99,7 +101,7 @@ class MockBrokerAdapter(BrokerAdapter):
                 broker_order_id=broker_order_id,
                 status="filled",
                 filled_quantity=request.quantity,
-                avg_fill_price=request.limit_price,
+                avg_fill_price=self.fill_price,
                 raw={"simulated": True},
             )
         else:

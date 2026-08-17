@@ -42,6 +42,7 @@ export interface Portfolio {
   cash: string;
   currency: string;
   status: string;
+  execution_mode: string;
   created_at: string;
   updated_at: string;
 }
@@ -59,6 +60,8 @@ export interface Order {
   order_type: OrderType;
   quantity: number;
   limit_price: string | null;
+  execution_mode: string;
+  broker_order_id: string | null;
   status: string;
   filled_quantity: number;
   avg_fill_price: string | null;

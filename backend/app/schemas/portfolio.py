@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.domain.enums import PortfolioStatus
+from app.domain.enums import ExecutionMode, PortfolioStatus
 
 
 class PortfolioCreate(BaseModel):
@@ -12,6 +12,7 @@ class PortfolioCreate(BaseModel):
     description: str | None = Field(default=None, max_length=500)
     initial_capital: Decimal = Field(gt=0, max_digits=18, decimal_places=2)
     currency: str = Field(default="INR", pattern=r"^[A-Z]{3}$")
+    execution_mode: ExecutionMode = ExecutionMode.PAPER
 
 
 class PortfolioUpdate(BaseModel):
@@ -21,6 +22,7 @@ class PortfolioUpdate(BaseModel):
         default=None, gt=0, max_digits=18, decimal_places=2
     )
     status: PortfolioStatus | None = None
+    execution_mode: ExecutionMode | None = None
 
 
 class PortfolioRead(BaseModel):
@@ -34,5 +36,6 @@ class PortfolioRead(BaseModel):
     cash: Decimal
     currency: str
     status: PortfolioStatus
+    execution_mode: ExecutionMode
     created_at: datetime
     updated_at: datetime
