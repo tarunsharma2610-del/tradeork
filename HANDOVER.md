@@ -48,16 +48,16 @@ order APIs.
 ```
 .
 ├── backend/
-│   ├── alembic/                 # migrations 0001..0003
+│   ├── alembic/                 # migrations 0001..0004
 │   ├── app/
 │   │   ├── api/v1/endpoints/    # auth, users, portfolios, trading, instruments, market, health
 │   │   ├── core/                # config, database, redis, security
-│   │   ├── domain/              # enums (OrderSide/Type/Status, etc.)
+│   │   ├── domain/              # enums (OrderSide/Type/Status, ExecutionMode, etc.)
 │   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade
 │   │   ├── schemas/             # request/response Pydantic models
 │   │   ├── services/            # auth, users, portfolios, paper_engine, live_execution, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
 │   │   └── repositories/        # data-access layer per entity
-│   └── tests/                   # pytest + ruff (74 tests, all green)
+│   └── tests/                   # pytest + ruff (106 tests, all green)
 ├── frontend/
 │   └── src/
 │       ├── app/                 # /, /login, /register, /dashboard
@@ -75,6 +75,11 @@ Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
 adapter) are DONE. Paper engine remains untouched as the source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
+
+**Current session note (2026-08-17):** No code changed this session — the
+preview was deployed and the USER gave detailed UI feedback that defines the
+NEXT feature work. See "Most recent session" and "Next step" below. The
+working tree is clean; commits `83ee2ac` and `a2ca5b1` are pushed to `main`.
 
 ## How to continue WITHOUT burning your token budget
 
@@ -98,6 +103,8 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 | Change auth/session | `backend/app/services/auth.py` → `backend/app/api/v1/endpoints/auth.py` → `backend/app/core/security.py` → `frontend/src/lib/auth.tsx` |
 | Change market data | `backend/app/services/market_data.py` → `provider_factory.py` → `quote_stream.py` → `upstox.py` → `backend/app/api/v1/endpoints/market.py` |
 | DB schema change | `backend/app/models/<entity>.py` → `backend/alembic/versions/` (next revision) → `backend/app/repositories/<entity>.py` → add a test |
+| **Build Strategies feature** | This HANDOVER "Next step" → `backend/app/models/` (strategy pattern from `order.py`) → `backend/alembic/versions/` next revision → `backend/app/repositories/` → `backend/app/services/` → `backend/app/schemas/` → `backend/app/api/v1/endpoints/` + `router.py` → `backend/tests/` → `frontend/src/lib/api.ts` → `frontend/src/components/` → `frontend/src/app/dashboard/page.tsx` |
+| **Build Settings page (live/paper toggle + broker config)** | `backend/app/services/portfolios.py` (update already accepts `execution_mode`) → `backend/app/api/v1/endpoints/portfolios.py` (PATCH exists) → `backend/app/services/broker.py`/`upstox_broker.py`/`broker_factory.py` (per-user token store if requested) → `frontend/src/app/settings/page.tsx` (new) → `frontend/src/components/dashboard-header.tsx` (add Settings link) → `frontend/src/lib/api.ts` |
 
 ### File map (one line each)
 
@@ -237,6 +244,17 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
   ledger booking, gates, matcher skip, ownership), **106 total passing**;
   ruff clean; migration up/down/up OK; frontend typecheck/lint/build green.
 
+### Session 2026-08-17 — preview deploy + user feedback (no code changes)
+- Deployed the preview (backend 8000 + frontend 3000 on SQLite, seeded), no
+  code changes, working tree left clean. See "Running the preview" above.
+- User reviewed the dashboard and requested: (1) per-portfolio strategies bar
+  to add/edit strategies, (2) Settings with a live/paper mode switch and a
+  place to add the broker API, (3) complained order-placing/paper-fills aren't
+  discoverable and register wasn't visible. All of this is now the prioritized
+  "Next step" above. Backend already supports the mode switch
+  (`execution_mode` on `PATCH /portfolios/{id}`); strategies and a Settings
+  page do not exist yet.
+
 ## Verification commands
 
 ```bash
@@ -259,12 +277,79 @@ npm run build
 Manual flow smoke-tested: register → create portfolio → MARKET order fills →
 positions/summary/orders reflect cash, position, P&L.
 
+## Running the preview (sandbox, no Docker/Postgres/Redis)
+
+The preview was started on 2026-08-17 and works without Docker/Postgres/Redis.
+To reproduce in a fresh session (ports: backend 8000, frontend 3000; frontend
+proxies `/api/*` → backend via `next.config.mjs` rewrites):
+
+```bash
+# 1. Prep SQLite DB + seed instruments (from backend/)
+cd backend
+DATABASE_URL=sqlite:////tmp/tradeork.db alembic upgrade head
+DATABASE_URL=sqlite:////tmp/tradeork.db python3 -m app.seed   # ~63 instruments
+
+# 2. Backend (use background terminal, NOT a blocking shell)
+cd /workspace/backend && \
+DATABASE_URL=sqlite:////tmp/tradeork.db RATE_LIMIT_ENABLED=false \
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+
+# 3. Frontend (background terminal)
+cd /workspace/frontend && NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
+
+# 4. Request a preview URL for port 3000 (request_preview tool)
+```
+
+Notes:
+- Redis is NOT required: rate limiting falls back to in-memory when Redis is
+  unreachable; `/api/v1/health` reports `redis: unavailable` — harmless.
+- `RATE_LIMIT_ENABLED=false` avoids 429s during interactive preview.
+- `LIVE_EXECUTION_ENABLED` stays at default false unless you explicitly want
+  the live-mode switch usable in the preview (it will 400 otherwise).
+- The exact preview URL from the session was
+  `https://3000-09d2aedd8dd31212.monkeycode-ai.live` (session-scoped; request a
+  new one after the preview restarts).
+- Stop servers with the background-terminal kill tool (never `pkill`).
+
 ## Next step
 
-**Phase 4: Live execution adapter.** Items 1–2 done: `BrokerAdapter` +
-Upstox/Mock + factory, and a portfolio-level LIVE mode wired to it (orders
-route through the adapter, fills mirror into the paper ledger). Remaining open
-items, in suggested order:
+> **PRIORITY CHANGE from user feedback (2026-08-17, preview session).**
+> The user previewed the app and reported it feels like "just a simple page —
+> create portfolio + refresh mock data". They explicitly asked for the
+> following, in their own words:
+>
+> 1. **A strategies bar where I can manually add or edit strategies for each
+>    portfolio.** → Build a per-portfolio `strategies` feature (new DB model +
+>    migration `0005`, CRUD API under `/portfolios/{id}/strategies`, and a UI
+>    panel on the dashboard to add/edit/delete strategies). This does NOT exist
+>    yet anywhere in the codebase.
+> 2. **In Settings: option to switch between live mode and paper trading mode.**
+>    → Backend ALREADY supports this: `PATCH /portfolios/{id}` accepts
+>    `execution_mode` (`paper`/`live`), gated by `LIVE_EXECUTION_ENABLED`
+>    (default false). Missing piece is the **Settings UI** (new
+>    `frontend/src/app/settings/page.tsx`) + a **Settings link in the dashboard
+>    header**, exposing the per-portfolio mode switch.
+> 3. **In Settings: option to add API / the broker.** → Decide scope: per-user
+>    broker access-token storage (new model + masked-at-rest, selected per
+>    user in `broker_factory`/`_execution_for`) vs. read-only status of the
+>    server-configured `BROKER_ADAPTER`. Recommend the per-user token store so
+>    "add your Upstox API" is real. Note `get_broker()` currently resolves a
+>    SINGLE global adapter from env — a per-user token means threading the
+>    user's stored token through `trading.py:_execution_for` and
+>    `upstox_broker.UpstoxBrokerAdapter`.
+> 4. **Order placing / paper fills are not discoverable** — the `TradingPanel`
+>    exists and works (trade ticket, positions, orders, fills, cancel) but sits
+>    below the fold on `/dashboard` behind the portfolios/quotes grid. Consider
+>    tabbed/nav structure on the dashboard so trading is front and center, and
+>    a visible Register entry point (register page already exists at `/register`;
+>    the user did not see it).
+>
+> Suggested execution order: Settings page + header link first (cheap, backend
+> already done), then Strategies feature (full stack), then broker token store.
+> Update this file + README in the same commit as always.
+
+**Phase 4 remaining open items** (from the original roadmap, still valid but
+lower priority than the user's new requests above), in suggested order:
 
 1. **Upstox OAuth token refresh** (currently expects long-lived token).
 2. **Order book / slippage / brokerage-fee model** for paper fills (currently
