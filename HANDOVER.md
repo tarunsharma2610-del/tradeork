@@ -56,6 +56,69 @@ order APIs.
 
 All backend and frontend checks pass. The last commit is on `main`.
 
+## How to continue WITHOUT burning your token budget
+
+The whole repo is **~7,400 lines** (~3,400 backend, ~1,200 tests, ~2,800
+frontend). **Do NOT read everything.** Read only the files your task touches.
+
+- Files are cheap to read (models/schemas/repositories are 20-80 lines each).
+  The three "big" files that matter are `paper_engine.py` (423), `seed.py`
+  (217), and `trading-panel.tsx` (517).
+- Tests are the best spec: for any behaviour question, read the matching test
+  file first — it shows exactly how the engine/API is expected to behave.
+
+### Reading plans
+
+| Your task | Files to read (in order) |
+|---|---|
+| Continue Phase 4 (broker adapter) | `HANDOVER.md` → `backend/app/services/paper_engine.py` → `backend/app/core/config.py` → `backend/app/services/provider_factory.py` → `backend/app/services/upstox.py` → `backend/tests/test_paper_engine.py` |
+| Understand the paper engine | `backend/app/services/paper_engine.py` → `backend/app/domain/enums.py` → `backend/app/models/order.py` + `position.py` + `trade.py` → `backend/tests/test_paper_engine.py` |
+| Add/change an API endpoint | `backend/app/api/v1/endpoints/*.py` (the matching one) → `backend/app/api/v1/router.py` → `backend/app/schemas/*.py` → matching test in `backend/tests/` |
+| Work on frontend | `frontend/src/lib/api.ts` → `frontend/src/app/dashboard/page.tsx` → the relevant `frontend/src/components/*.tsx` → `frontend/src/lib/use-market-stream.ts` |
+| Change auth/session | `backend/app/services/auth.py` → `backend/app/api/v1/endpoints/auth.py` → `backend/app/core/security.py` → `frontend/src/lib/auth.tsx` |
+| Change market data | `backend/app/services/market_data.py` → `provider_factory.py` → `quote_stream.py` → `upstox.py` → `backend/app/api/v1/endpoints/market.py` |
+| DB schema change | `backend/app/models/<entity>.py` → `backend/alembic/versions/` (next revision) → `backend/app/repositories/<entity>.py` → add a test |
+
+### File map (one line each)
+
+**Backend services** (`backend/app/services/`)
+- `paper_engine.py` (423) — THE core: order placement, fills, matcher, positions, summary. Read for any trading change.
+- `market_data.py` (188) — quote fetching/caching via provider abstraction.
+- `auth.py` (137) — register/login/refresh/logout logic.
+- `quote_stream.py` (136) — WebSocket quote streaming.
+- `upstox.py` (113) — Upstox REST provider (live quotes).
+- `provider_factory.py` (33) — picks mock vs upstox from `MARKET_DATA_PROVIDER`.
+- `portfolios.py` (79), `instruments.py` (38), `users.py` (20), `audit.py` (36).
+
+**Backend API** (`backend/app/api/v1/endpoints/`)
+- `trading.py` (72) — Phase 3 endpoints (orders/positions/summary).
+- `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34).
+- `router.py` (20) — registers all routers.
+
+**Backend core** (`backend/app/core/`)
+- `config.py` (94) — all env settings (incl. `PAPER_MATCHER_*`).
+- `security.py` (56), `database.py` (23), `redis.py` (20), `rate_limit.py` (88).
+
+**Backend models** (`backend/app/models/`) — `order.py` (71), `position.py` (73), `trade.py` (73), `portfolio.py` (59), `instrument.py` (58), `user.py` (53), `refresh_token.py` (42), `audit_log.py` (38). Each is a plain SQLAlchemy table.
+
+**Backend schemas** (`backend/app/schemas/`) — thin Pydantic DTOs, 15-52 lines each.
+
+**Backend tests** (`backend/tests/`) — read as spec: `test_paper_engine.py` (272), `test_trading_api.py` (188), `test_portfolios.py` (140), `test_market_ws.py` (90), others smaller. `conftest.py` (75) = fixtures; `helpers.py` (29) = `register_user`/`auth_headers`.
+
+**Frontend** (`frontend/src/`)
+- `lib/api.ts` (253) — typed API client; every backend call goes through here.
+- `lib/auth.tsx` (97), `lib/use-market-stream.ts` (203).
+- `components/trading-panel.tsx` (517) — trade ticket + positions/orders UI.
+- `components/market-quotes-card.tsx` (300), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78).
+- `app/dashboard/page.tsx` (157) — wires everything; `app/page.tsx` (240) = landing.
+
+### Suggested first steps for a new agent
+
+1. Read this HANDOVER.md (you're here).
+2. Run the verification commands below to confirm green baseline (cheap, no reading).
+3. Read only the files in the row that matches your task.
+4. Never read `seed.py` unless touching the instrument catalog.
+
 ## What has been done
 
 ### Phase 1 — Foundation & auth (commit `646537e`, `b5374a9`)
