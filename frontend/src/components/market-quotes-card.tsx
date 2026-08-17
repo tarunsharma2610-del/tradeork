@@ -3,6 +3,7 @@
 import { RefreshCw, TrendingDown, TrendingUp } from "lucide-react";
 import * as React from "react";
 
+import { InstrumentSearch } from "@/components/instrument-search";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,6 +19,8 @@ import { cn } from "@/lib/utils";
 
 interface MarketQuotesCardProps {
   token: string | null;
+  /** Reports the current feed/mode so parent cards can reflect reality. */
+  onFeedInfo?: (info: { mode: string; isMock: boolean | null; source: string | null }) => void;
 }
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -25,16 +28,51 @@ const inr = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+const TRAIL_POINTS = 40;
+
+function Sparkline({ points, className }: { points: number[]; className?: string }) {
+  if (points.length < 2) return null;
+  const width = 64;
+  const height = 28;
+  const min = Math.min(...points);
+  const max = Math.max(...points);
+  const span = max - min || 1;
+  const step = (width - 4) / (points.length - 1);
+  const coords = points.map((p, i) => {
+    const x = 2 + i * step;
+    const y = 2 + (height - 4) * (1 - (p - min) / span);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  });
+  const up = points[points.length - 1] >= points[0];
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      className={cn("h-7 w-16", className)}
+      aria-hidden
+    >
+      <polyline
+        points={coords.join(" ")}
+        fill="none"
+        strokeWidth={1.5}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+        className={up ? "stroke-positive" : "stroke-negative"}
+      />
+    </svg>
+  );
+}
+
 function streamLabel(mode: string, isMock: boolean | undefined): string {
   if (mode === "idle") return "offline";
   const feed = isMock ? "mock" : "live";
   return mode === "live" ? `${feed} · streaming` : `${feed} · polling`;
 }
 
-export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
+export function MarketQuotesCard({ token, onFeedInfo }: MarketQuotesCardProps) {
   const [input, setInput] = React.useState("RELIANCE,TCS,NIFTY");
   const [error, setError] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [trail, setTrail] = React.useState<Record<string, number[]>>({});
 
   const symbols = React.useMemo(
     () =>
@@ -55,6 +93,25 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
     token,
     onError,
   });
+
+  // Maintain a rolling price trail per symbol for the sparklines.
+  React.useEffect(() => {
+    if (quotes.length === 0) return;
+    setTrail((prev) => {
+      const next = { ...prev };
+      for (const q of quotes) {
+        const series = [...(next[q.symbol] ?? []), Number(q.last_price)];
+        next[q.symbol] = series.slice(-TRAIL_POINTS);
+      }
+      return next;
+    });
+  }, [quotes]);
+
+  const isMock = quotes[0]?.is_mock ?? null;
+
+  React.useEffect(() => {
+    onFeedInfo?.({ mode, isMock, source: quotes[0]?.source ?? null });
+  }, [onFeedInfo, mode, isMock, quotes]);
 
   const handleRefresh = React.useCallback(async () => {
     if (!token || symbols.length === 0) {
@@ -77,7 +134,19 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
     }
   }, [symbols]);
 
-  const isMock = quotes[0]?.is_mock;
+  const addSymbol = React.useCallback(
+    (symbol: string) => {
+      setInput((prev) => {
+        const current = prev
+          .split(",")
+          .map((s) => s.trim().toUpperCase())
+          .filter(Boolean);
+        if (current.includes(symbol)) return current.join(",");
+        return [...current, symbol].join(",");
+      });
+    },
+    []
+  );
 
   return (
     <Card>
@@ -85,7 +154,7 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
         <div className="space-y-1.5">
           <CardTitle>Market quotes</CardTitle>
           <CardDescription>
-            {isMock
+            {isMock === true
               ? "Simulated NSE quotes — clearly marked as mock data"
               : "Live NSE quotes streamed from your configured provider"}
           </CardDescription>
@@ -93,7 +162,7 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
         <span
           className={cn(
             "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground",
-            mode === "live" && !isMock && "border-positive/30 bg-positive/10 text-positive"
+            mode === "live" && isMock === false && "border-positive/30 bg-positive/10 text-positive"
           )}
         >
           <span
@@ -102,7 +171,7 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
               mode === "live" ? "animate-pulse bg-positive" : "bg-muted-foreground"
             )}
           />
-          {streamLabel(mode, isMock)}
+          {streamLabel(mode, isMock ?? undefined)}
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -126,6 +195,7 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
             {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
+        <InstrumentSearch onSelect={addSymbol} className="max-w-sm" />
 
         {error && <p className="text-sm text-destructive">{error}</p>}
 
@@ -136,9 +206,10 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
                 <thead>
                   <tr className="border-b text-left text-xs uppercase tracking-wide text-muted-foreground">
                     <th className="pb-2 pr-3 font-medium">Symbol</th>
+                    <th className="hidden pb-2 pr-3 font-medium sm:table-cell">Trend</th>
                     <th className="pb-2 pr-3 text-right font-medium">Last</th>
                     <th className="pb-2 pr-3 text-right font-medium">Change</th>
-                    <th className="hidden pb-2 pr-3 text-right font-medium sm:table-cell">
+                    <th className="hidden pb-2 pr-3 text-right font-medium md:table-cell">
                       Open
                     </th>
                     <th className="hidden pb-2 pr-3 text-right font-medium md:table-cell">
@@ -163,7 +234,22 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
                     return (
                       <tr key={q.symbol} className="border-b last:border-0">
                         <td className="py-2.5 pr-3">
-                          <span className="font-medium">{q.symbol}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{q.symbol}</span>
+                            <span
+                              className={cn(
+                                "rounded-full px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide",
+                                q.is_mock
+                                  ? "bg-muted text-muted-foreground"
+                                  : "bg-positive/10 text-positive"
+                              )}
+                            >
+                              {q.is_mock ? "mock" : "live"}
+                            </span>
+                          </div>
+                        </td>
+                        <td className="hidden py-2.5 pr-3 sm:table-cell">
+                          <Sparkline points={trail[q.symbol] ?? []} />
                         </td>
                         <td className="py-2.5 pr-3 text-right font-medium tabular-nums">
                           ₹{inr.format(Number(q.last_price))}
@@ -184,7 +270,7 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
                             {inr.format(change)} ({pct.toFixed(2)}%)
                           </span>
                         </td>
-                        <td className="hidden py-2.5 pr-3 text-right tabular-nums text-muted-foreground sm:table-cell">
+                        <td className="hidden py-2.5 pr-3 text-right tabular-nums text-muted-foreground md:table-cell">
                           {inr.format(Number(q.open))}
                         </td>
                         <td className="hidden py-2.5 pr-3 text-right tabular-nums text-muted-foreground md:table-cell">

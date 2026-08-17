@@ -59,6 +59,21 @@ export interface Quote {
   source: string;
 }
 
+export interface Instrument {
+  id: string;
+  symbol: string;
+  name: string;
+  exchange: string;
+  instrument_type: string;
+  segment: string | null;
+  expiry: string | null;
+  strike_price: string | null;
+  option_type: string | null;
+  lot_size: number;
+  tick_size: string;
+  is_active: boolean;
+}
+
 interface RegisterPayload {
   email: string;
   password: string;
@@ -138,5 +153,15 @@ export const api = {
       `/market/quotes?symbols=${encodeURIComponent(symbols.join(","))}&exchange=${exchange}`,
       {},
       token
+    ),
+  searchInstruments: (
+    q: string,
+    opts: { exchange?: string; instrument_type?: string; limit?: number } = {}
+  ) =>
+    request<Instrument[]>(
+      `/instruments?q=${encodeURIComponent(q)}` +
+        (opts.exchange ? `&exchange=${opts.exchange}` : "") +
+        (opts.instrument_type ? `&instrument_type=${opts.instrument_type}` : "") +
+        `&limit=${opts.limit ?? 10}`
     ),
 };

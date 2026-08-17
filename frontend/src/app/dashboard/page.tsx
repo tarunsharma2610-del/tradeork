@@ -21,6 +21,11 @@ export default function DashboardPage() {
   const router = useRouter();
   const [portfolios, setPortfolios] = React.useState<Portfolio[]>([]);
   const [health, setHealth] = React.useState<string | null>(null);
+  const [feedInfo, setFeedInfo] = React.useState<{
+    mode: string;
+    isMock: boolean | null;
+    source: string | null;
+  } | null>(null);
 
   const token = tokens?.access_token ?? null;
 
@@ -65,10 +70,20 @@ export default function DashboardPage() {
     },
     {
       label: "Data mode",
-      value: "Mock",
-      hint: "is_mock: true",
+      value: feedInfo
+        ? feedInfo.isMock === null
+          ? "…"
+          : feedInfo.isMock
+            ? "Mock"
+            : "Live"
+        : "Mock",
+      hint: feedInfo
+        ? feedInfo.source
+          ? `source: ${feedInfo.source} · mode: ${feedInfo.mode}`
+          : `mode: ${feedInfo.mode}`
+        : "is_mock: true (default)",
       icon: statIcons.Database,
-      accent: "positive",
+      accent: feedInfo?.isMock === false ? "positive" : "default",
     },
     {
       label: "Platform",
@@ -103,7 +118,7 @@ export default function DashboardPage() {
 
         <div className="grid gap-6 lg:grid-cols-2">
           <PortfoliosSection token={token} />
-          <MarketQuotesCard token={token} />
+          <MarketQuotesCard token={token} onFeedInfo={setFeedInfo} />
         </div>
 
         <Card>

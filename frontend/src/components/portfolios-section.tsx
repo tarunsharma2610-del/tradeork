@@ -29,6 +29,7 @@ export function PortfoliosSection({ token }: PortfoliosSectionProps) {
   const [name, setName] = React.useState("");
   const [capital, setCapital] = React.useState("100000");
   const [error, setError] = React.useState<string | null>(null);
+  const [confirmingId, setConfirmingId] = React.useState<string | null>(null);
 
   const load = React.useCallback(async () => {
     if (!token) return;
@@ -71,8 +72,10 @@ export function PortfoliosSection({ token }: PortfoliosSectionProps) {
     try {
       await api.deletePortfolio(token, id);
       setPortfolios((prev) => prev.filter((p) => p.id !== id));
+      setConfirmingId(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to delete portfolio.");
+      setConfirmingId(null);
     }
   }
 
@@ -148,15 +151,36 @@ export function PortfoliosSection({ token }: PortfoliosSectionProps) {
                     })}
                   </p>
                 </div>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                  onClick={() => onDelete(p.id)}
-                  aria-label={`Delete portfolio ${p.name}`}
-                >
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                {confirmingId === p.id ? (
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => onDelete(p.id)}
+                      aria-label={`Confirm delete portfolio ${p.name}`}
+                    >
+                      Confirm
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmingId(null)}
+                      aria-label={`Cancel delete portfolio ${p.name}`}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 text-muted-foreground hover:text-destructive"
+                    onClick={() => setConfirmingId(p.id)}
+                    aria-label={`Delete portfolio ${p.name}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

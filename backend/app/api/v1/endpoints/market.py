@@ -83,7 +83,20 @@ async def market_quotes_stream(
     if authenticate_token(token or "", db) is None:
         await websocket.close(code=4401)
         return
+
+    async def validate_symbols(
+        symbols: list[str], exchange: str
+    ) -> list[str]:
+        repo = InstrumentRepository(db)
+        return [
+            s
+            for s in symbols
+            if repo.get_by_exchange_symbol(exchange, s) is None
+        ]
+
     stream = QuoteStreamService(
-        market_data_service, interval=settings.MARKET_DATA_POLL_INTERVAL
+        market_data_service,
+        interval=settings.MARKET_DATA_POLL_INTERVAL,
+        validate_symbols=validate_symbols,
     )
     await stream.handle(websocket)

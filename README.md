@@ -37,9 +37,11 @@ Architected so the trading engine can later support real broker execution
   - Typed request/response models, consistent error responses, versioned API (`/api/v1`)
 - **Frontend** (`frontend/`, Next.js 15 + TypeScript + Tailwind + shadcn/ui)
   - Landing page, login, register, dashboard
-  - Dashboard: account card, portfolios section (create/delete), market quotes
-    card (WebSocket streaming with automatic polling fallback, live/mock
-    badge), system status
+  - Dashboard: account card, portfolios section (create/delete with inline
+    confirmation), market quotes card (WebSocket streaming with automatic
+    polling fallback, live/mock badge, per-symbol source tag, price sparkline,
+    instrument-catalog search to add symbols), dynamic "Data mode" stat that
+    reflects the actual feed, system status
   - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)
   - Light + dark themes, responsive layout
 - **Deployment**
@@ -159,7 +161,8 @@ GET /api/v1/market/ws?token=<access JWT>&symbols=RELIANCE,TCS&exchange=NSE
   as a query parameter; the server validates it like any other access token.
 - Push interval follows `MARKET_DATA_POLL_INTERVAL` (default 2s).
 - Re-subscribe at any time by sending `{"action": "subscribe", "symbols":
-  [...], "exchange": "NSE"}`.
+  [...], "exchange": "NSE"}`; unknown symbols are reported back as an
+  `error` frame (`code: "unknown_symbols"`) instead of being silently dropped.
 - The dashboard quotes card opens this stream automatically and transparently
   falls back to REST polling (every 3s) if the socket cannot be established.
 
@@ -219,14 +222,17 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 3. Create a second portfolio with the same name → friendly 409 error shown.
 4. Dashboard → **Market quotes**: default `RELIANCE,TCS,NIFTY` loads quotes;
    the badge shows `mock · streaming` when connected over WebSocket (or
-   `polling` if the socket falls back). Change symbols and watch them update.
-5. Request an unknown symbol (e.g. `ZZZZ`) → friendly 404 error shown.
-6. Check the WebSocket endpoint auth: opening `/api/v1/market/ws` without a
-   token is closed with code `4401`.
-7. Delete a portfolio → it disappears from the list.
+   `polling` if the socket falls back). Change symbols and watch them update;
+   each row carries a `mock`/`live` tag and a price sparkline.
+5. Use the **"Add symbol"** search to pick instruments from the catalog
+   (e.g. `HDFCBANK`); the symbol joins the watchlist.
+6. Request an unknown symbol (e.g. `ZZZZ`) → REST shows a 404; the WebSocket
+   stream instead sends an `unknown_symbols` error frame listing it.
+7. Delete a portfolio → it asks for confirmation before removing.
 8. Sign out → returns to login; login again → portfolios still listed.
 9. Direct hit on `/api/v1/portfolios` or `/api/v1/market/quotes` without a token → 401.
 10. With Docker: `docker compose up --build` then repeat the above via `http://localhost`.
 11. Confirm `/docs` renders the OpenAPI schema for the new endpoints.
 12. With Upstox credentials configured (`MARKET_DATA_PROVIDER=upstox`), the
-    quotes card badge switches to `live · streaming` and rows show real NSE prices.
+    quotes card badge switches to `live · streaming`, rows show `live` tags,
+    and the dashboard "Data mode" stat reports `Live`.
