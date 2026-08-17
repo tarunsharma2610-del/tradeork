@@ -30,6 +30,26 @@ class Settings(BaseSettings):
 
     RATE_LIMIT_ENABLED: bool = True
 
+    # Market data provider selection.
+    # "mock"  -> synthetic quotes, always labelled is_mock=true
+    # "upstox" -> live Upstox v2 REST quotes (requires credentials below)
+    MARKET_DATA_PROVIDER: str = "mock"
+    MARKET_DATA_POLL_INTERVAL: float = 2.0
+
+    # Upstox v2 API (live provider). Tokens are long-lived app access tokens;
+    # OAuth refresh flow is out of scope for now.
+    UPSTOX_API_KEY: str = ""
+    UPSTOX_ACCESS_TOKEN: str = ""
+    UPSTOX_BASE_URL: str = "https://api.upstox.com/v2"
+
+    @field_validator("MARKET_DATA_PROVIDER")
+    @classmethod
+    def _validate_market_data_provider(cls, v: str) -> str:
+        provider = v.lower()
+        if provider not in ("mock", "upstox"):
+            raise ValueError("MARKET_DATA_PROVIDER must be 'mock' or 'upstox'")
+        return provider
+
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def _parse_cors_origins(cls, v: Any) -> Any:

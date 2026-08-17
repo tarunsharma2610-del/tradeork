@@ -4,7 +4,7 @@ Multi-user SaaS paper-trading platform for Indian markets (NSE, BSE, MCX).
 Architected so the trading engine can later support real broker execution
 (Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.
 
-**Status: Phase 1 — Portfolios, instruments + market data foundation.**
+**Status: Phase 2 — Live market data via WebSocket streaming (Upstox provider).**
 
 ## What is implemented
 
@@ -21,9 +21,16 @@ Architected so the trading engine can later support real broker execution
     per user, Decimal capital, ownership enforced in the service layer
   - Instruments: reference catalog (NSE/BSE/MCX, equity/futures/options) with
     search (symbol/name, exchange, instrument type) and natural-key dedupe
-  - Market data foundation: provider abstraction + clearly-labelled mock
-    provider (`is_mock: true`, `source: "mock"`), Redis-cached quotes (TTL 2s)
+  - Market data: provider abstraction + clearly-labelled mock provider
+    (`is_mock: true`, `source: "mock"`), Redis-cached quotes (TTL 2s)
     that degrade gracefully to provider-only
+  - **Live market data**: `UpstoxMarketDataProvider` (`is_mock: false`,
+    `source: "upstox"`) via Upstox v2 REST quotes; provider selected by
+    `MARKET_DATA_PROVIDER` config, with safe mock fallback when live
+    credentials are missing
+  - **WebSocket quote streaming** (`/api/v1/market/ws`): authenticated via
+    access-token query param, push interval from `MARKET_DATA_POLL_INTERVAL`,
+    supports dynamic subscribe messages and a client that falls back to polling
   - Seed script (`python -m app.seed`) for the reference instrument catalog
   - Audit logging for security-relevant events
   - Health endpoint reporting DB + Redis status
@@ -31,7 +38,8 @@ Architected so the trading engine can later support real broker execution
 - **Frontend** (`frontend/`, Next.js 15 + TypeScript + Tailwind + shadcn/ui)
   - Landing page, login, register, dashboard
   - Dashboard: account card, portfolios section (create/delete), market quotes
-    card (live simulated quotes, mock-labelled), system status
+    card (WebSocket streaming with automatic polling fallback, live/mock
+    badge), system status
   - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)
   - Light + dark themes, responsive layout
 - **Deployment**
@@ -53,14 +61,15 @@ Architected so the trading engine can later support real broker execution
 │   │   ├── api/v1/         # routers + endpoints (auth, users, health, portfolios, instruments, market)
 │   │   ├── models/         # SQLAlchemy models
 │   │   ├── schemas/        # Pydantic request/response models
-│   │   ├── services/       # business logic (portfolios, instruments, market data)
+│   │   ├── services/       # business logic (portfolios, instruments, market data,
+│   │   │                   #   upstox provider, provider factory, quote stream)
 │   │   └── repositories/   # data access
 │   └── tests/
 ├── frontend/
 │   └── src/
 │       ├── app/            # pages (landing, login, register, dashboard)
 │       ├── components/     # shadcn/ui primitives + theme
-│       └── lib/            # api client, auth context
+│       └── lib/            # api client, auth context, use-market-stream hook
 ├── nginx/nginx.conf
 ├── docker-compose.yml
 └── .github/workflows/ci.yml
@@ -113,6 +122,47 @@ NEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev
 The frontend proxies `/api/*` to the backend so you can always use
 `http://localhost:3000/api/v1/...`.
 
+## Market data providers
+
+Quotes flow through a provider abstraction. Every quote carries
+`is_mock` and `source`, so simulated data can never be mistaken for a
+live feed.
+
+| Provider | `is_mock` | `source` | Config |
+|----------|-----------|----------|--------|
+| Mock (default) | `true` | `mock` | `MARKET_DATA_PROVIDER=mock` |
+| Upstox (live) | `false` | `upstox` | `MARKET_DATA_PROVIDER=upstox` + Upstox credentials |
+
+To enable live data:
+
+```bash
+# backend/.env (or docker-compose environment)
+MARKET_DATA_PROVIDER=upstox
+UPSTOX_API_KEY=your-app-key
+UPSTOX_ACCESS_TOKEN=your-long-lived-access-token
+UPSTOX_BASE_URL=https://api.upstox.com/v2
+```
+
+If `upstox` is selected but the credentials are missing, the service logs a
+warning and **fails safe to the mock provider** (still labelled `is_mock:
+true`) rather than crashing or mislabelling data.
+
+### WebSocket streaming
+
+Authenticated clients can subscribe to a live quote stream instead of polling:
+
+```
+GET /api/v1/market/ws?token=<access JWT>&symbols=RELIANCE,TCS&exchange=NSE
+```
+
+- The browser cannot set headers on a WebSocket handshake, so auth is passed
+  as a query parameter; the server validates it like any other access token.
+- Push interval follows `MARKET_DATA_POLL_INTERVAL` (default 2s).
+- Re-subscribe at any time by sending `{"action": "subscribe", "symbols":
+  [...], "exchange": "NSE"}`.
+- The dashboard quotes card opens this stream automatically and transparently
+  falls back to REST polling (every 3s) if the socket cannot be established.
+
 ## Verify
 
 ```bash
@@ -133,11 +183,13 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   and any key shorter than 32 characters.
 - CSRF: the API is bearer-token based (no cookie-authenticated state-changing
   requests), so CSRF protection applies once cookie-based flows are introduced.
-- No broker credentials are stored or handled anywhere yet.
+- No broker credentials are stored or handled anywhere yet; Upstox credentials
+  are provided via environment configuration only.
 - Portfolio ownership is enforced server-side (never trusted from the request
   body); a user cannot read or mutate another tenant's portfolios.
-- All market data is simulated and explicitly labelled (`is_mock: true`); the
-  provider abstraction ensures real feeds cannot be mistaken for mock data.
+- All market data is labelled with `is_mock`/`source`; the provider abstraction
+  ensures real feeds cannot be mistaken for mock data. The default provider is
+  mock; live Upstox data activates only when explicitly configured.
 
 ## Known limitations / deferred to later phases
 
@@ -145,13 +197,16 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   Dockerfiles are authored and YAML-validated but not yet built here.
 - Local verification used SQLite; the CI pipeline runs the full Postgres + Redis
   migration and test path.
-- Auth session is in-memory on the frontend: a page reload loses the access
-  token (refresh-cookie flow is implemented server-side and will be wired up).
+- Auth session is kept in memory on the frontend, restored on reload via the
+  httpOnly refresh cookie.
 - No email verification, MFA/2FA, password reset yet (skeleton only).
 - The instrument catalog is static reference data seeded into the DB; real
   instrument-master synchronisation from a broker/exchange feed is deferred.
-- Market quotes are synthetic (`MockMarketDataProvider`); no real tick data or
-  WebSocket streaming yet. Quotes are cached 2s in Redis.
+- The default provider is synthetic (`MockMarketDataProvider`); real tick data
+  via a broker WebSocket feed (Upstox/other) and Upstox OAuth token refresh are
+  deferred. Quotes are cached 2s in Redis and streamed over our own WebSocket.
+- The Upstox access token is expected to be long-lived; automatic re-auth on
+  expiry is not implemented yet.
 - Orders, positions, P&L, strategies, backtesting, broker adapters, news, AI
   and notifications are the subject of later phases.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
@@ -162,11 +217,16 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 1. Register a new account → lands on dashboard, shows account details.
 2. Dashboard → **Portfolios**: create one (name + capital), it appears in the list.
 3. Create a second portfolio with the same name → friendly 409 error shown.
-4. Dashboard → **Market quotes**: default `RELIANCE,TCS,NIFTY` loads mock quotes
-   (each row tagged `mock`); change symbols and refresh.
+4. Dashboard → **Market quotes**: default `RELIANCE,TCS,NIFTY` loads quotes;
+   the badge shows `mock · streaming` when connected over WebSocket (or
+   `polling` if the socket falls back). Change symbols and watch them update.
 5. Request an unknown symbol (e.g. `ZZZZ`) → friendly 404 error shown.
-6. Delete a portfolio → it disappears from the list.
-7. Sign out → returns to login; login again → portfolios still listed.
-8. Direct hit on `/api/v1/portfolios` or `/api/v1/market/quotes` without a token → 401.
-9. With Docker: `docker compose up --build` then repeat the above via `http://localhost`.
-10. Confirm `/docs` renders the OpenAPI schema for the new endpoints.
+6. Check the WebSocket endpoint auth: opening `/api/v1/market/ws` without a
+   token is closed with code `4401`.
+7. Delete a portfolio → it disappears from the list.
+8. Sign out → returns to login; login again → portfolios still listed.
+9. Direct hit on `/api/v1/portfolios` or `/api/v1/market/quotes` without a token → 401.
+10. With Docker: `docker compose up --build` then repeat the above via `http://localhost`.
+11. Confirm `/docs` renders the OpenAPI schema for the new endpoints.
+12. With Upstox credentials configured (`MARKET_DATA_PROVIDER=upstox`), the
+    quotes card badge switches to `live · streaming` and rows show real NSE prices.

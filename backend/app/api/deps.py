@@ -22,24 +22,32 @@ _credentials_exc = HTTPException(
 )
 
 
-def get_current_user(
-    token: str = Depends(oauth2_scheme),
-    db: Session = Depends(get_db),
-) -> User:
+def authenticate_token(token: str, db: Session) -> User | None:
+    """Validate an access token and return the matching active user, or None."""
     try:
         payload = decode_jwt_token(token)
     except jwt.InvalidTokenError:
-        raise _credentials_exc from None
+        return None
     if payload.get("type") != "access":
-        raise _credentials_exc
+        return None
     sub = payload.get("sub")
     try:
         user_id = uuid.UUID(sub) if sub else None
     except (TypeError, ValueError):
         user_id = None
     if user_id is None:
-        raise _credentials_exc
+        return None
     user = UserRepository(db).get(user_id)
     if user is None or not user.is_active:
+        return None
+    return user
+
+
+def get_current_user(
+    token: str = Depends(oauth2_scheme),
+    db: Session = Depends(get_db),
+) -> User:
+    user = authenticate_token(token, db)
+    if user is None:
         raise _credentials_exc
     return user

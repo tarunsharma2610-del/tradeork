@@ -39,6 +39,11 @@ services:
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-tradeork}:${POSTGRES_PASSWORD:-tradeork}@db:5432/${POSTGRES_DB:-tradeork}
       REDIS_URL: redis://redis:6379/0
       BACKEND_CORS_ORIGINS: ${BACKEND_CORS_ORIGINS:-http://localhost:3000}
+      MARKET_DATA_PROVIDER: ${MARKET_DATA_PROVIDER:-mock}
+      MARKET_DATA_POLL_INTERVAL: ${MARKET_DATA_POLL_INTERVAL:-2.0}
+      UPSTOX_API_KEY: ${UPSTOX_API_KEY:-}
+      UPSTOX_ACCESS_TOKEN: ${UPSTOX_ACCESS_TOKEN:-}
+      UPSTOX_BASE_URL: ${UPSTOX_BASE_URL:-https://api.upstox.com/v2}
     depends_on:
       db:
         condition: service_healthy

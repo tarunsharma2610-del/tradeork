@@ -12,7 +12,8 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { api, type Quote } from "@/lib/api";
+import type { Quote } from "@/lib/api";
+import { useMarketStream } from "@/lib/use-market-stream";
 import { cn } from "@/lib/utils";
 
 interface MarketQuotesCardProps {
@@ -24,40 +25,59 @@ const inr = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
-export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
-  const [symbols, setSymbols] = React.useState("RELIANCE,TCS,NIFTY");
-  const [quotes, setQuotes] = React.useState<Quote[]>([]);
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+function streamLabel(mode: string, isMock: boolean | undefined): string {
+  if (mode === "idle") return "offline";
+  const feed = isMock ? "mock" : "live";
+  return mode === "live" ? `${feed} · streaming` : `${feed} · polling`;
+}
 
-  const load = React.useCallback(async () => {
-    if (!token) return;
-    setError(null);
-    setLoading(true);
-    const list = symbols
-      .split(",")
-      .map((s) => s.trim().toUpperCase())
-      .filter(Boolean);
-    if (list.length === 0) {
+export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
+  const [input, setInput] = React.useState("RELIANCE,TCS,NIFTY");
+  const [error, setError] = React.useState<string | null>(null);
+  const [refreshing, setRefreshing] = React.useState(false);
+
+  const symbols = React.useMemo(
+    () =>
+      input
+        .split(",")
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean),
+    [input]
+  );
+
+  const onError = React.useCallback((message: string) => {
+    setError(message || null);
+  }, []);
+
+  const { quotes, mode, refresh } = useMarketStream({
+    symbols,
+    exchange: "NSE",
+    token,
+    onError,
+  });
+
+  const handleRefresh = React.useCallback(async () => {
+    if (!token || symbols.length === 0) {
       setError("Enter at least one symbol.");
-      setLoading(false);
       return;
     }
+    setRefreshing(true);
     try {
-      const data = await api.getQuotes(token, list, "NSE");
-      setQuotes(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Failed to fetch quotes.");
-      setQuotes([]);
+      await refresh();
     } finally {
-      setLoading(false);
+      setRefreshing(false);
     }
-  }, [token, symbols]);
+  }, [token, symbols, refresh]);
 
   React.useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (symbols.length === 0) {
+      setError("Enter at least one symbol.");
+    } else {
+      setError(null);
+    }
+  }, [symbols]);
+
+  const isMock = quotes[0]?.is_mock;
 
   return (
     <Card>
@@ -65,27 +85,45 @@ export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
         <div className="space-y-1.5">
           <CardTitle>Market quotes</CardTitle>
           <CardDescription>
-            Simulated NSE quotes — clearly marked as mock data
+            {isMock
+              ? "Simulated NSE quotes — clearly marked as mock data"
+              : "Live NSE quotes streamed from your configured provider"}
           </CardDescription>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-positive" />
-          mock
+        <span
+          className={cn(
+            "inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground",
+            mode === "live" && !isMock && "border-positive/30 bg-positive/10 text-positive"
+          )}
+        >
+          <span
+            className={cn(
+              "h-1.5 w-1.5 rounded-full",
+              mode === "live" ? "animate-pulse bg-positive" : "bg-muted-foreground"
+            )}
+          />
+          {streamLabel(mode, isMock)}
         </span>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="flex gap-2">
           <Input
             placeholder="e.g. RELIANCE,TCS,NIFTY"
-            value={symbols}
-            onChange={(e) => setSymbols(e.target.value)}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") load();
+              if (e.key === "Enter") handleRefresh();
             }}
           />
-          <Button onClick={load} disabled={loading} className="shrink-0">
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            {loading ? "Fetching…" : "Refresh"}
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing || !token}
+            className="shrink-0"
+          >
+            <RefreshCw
+              className={cn("h-4 w-4", refreshing && "animate-spin")}
+            />
+            {refreshing ? "Refreshing…" : "Refresh"}
           </Button>
         </div>
 

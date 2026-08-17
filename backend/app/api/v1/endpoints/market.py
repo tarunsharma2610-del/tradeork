@@ -1,19 +1,30 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import (
+    APIRouter,
+    Depends,
+    HTTPException,
+    Query,
+    WebSocket,
+    status,
+)
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import authenticate_token, get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.rate_limit import rate_limit_dependency
 from app.domain.enums import Exchange
-from app.models.user import User
 from app.repositories.instruments import InstrumentRepository
 from app.schemas.market import Quote
-from app.services.market_data import mock_market_data_service
+from app.services.market_data import MarketDataService
+from app.services.provider_factory import get_provider
+from app.services.quote_stream import QuoteStreamService
 
 router = APIRouter(prefix="/market", tags=["market"])
 
 quotes_rate_limit = rate_limit_dependency("market:quotes", 60, 60)
 MAX_SYMBOLS = 50
+
+market_data_service = MarketDataService(get_provider())
 
 
 @router.get(
@@ -24,7 +35,7 @@ MAX_SYMBOLS = 50
 async def get_quotes(
     symbols: str = Query(min_length=1, max_length=1000),
     exchange: Exchange = Exchange.NSE,
-    current_user: User = Depends(get_current_user),
+    current_user=Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> list:
     symbol_list = [
@@ -52,5 +63,27 @@ async def get_quotes(
             detail=f"Unknown {exchange.value} symbols: {', '.join(missing)}.",
         )
 
-    quotes = await mock_market_data_service.get_quotes(symbol_list, exchange.value)
+    quotes = await market_data_service.get_quotes(symbol_list, exchange.value)
     return quotes
+
+
+@router.websocket("/ws")
+async def market_quotes_stream(
+    websocket: WebSocket,
+    db: Session = Depends(get_db),
+) -> None:
+    """Stream quotes to an authenticated client over WebSocket.
+
+    Auth is via ``?token=<access JWT>`` (browsers cannot set headers on
+    WebSocket connections). Optionally pass ``symbols``/``exchange`` query
+    params for an initial subscription; the client can re-subscribe at any
+    time with ``{"action": "subscribe", ...}`` messages.
+    """
+    token = websocket.query_params.get("token")
+    if authenticate_token(token or "", db) is None:
+        await websocket.close(code=4401)
+        return
+    stream = QuoteStreamService(
+        market_data_service, interval=settings.MARKET_DATA_POLL_INTERVAL
+    )
+    await stream.handle(websocket)
