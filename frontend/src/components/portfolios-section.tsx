@@ -142,6 +142,11 @@ export function PortfoliosSection({ token }: PortfoliosSectionProps) {
                   <p className="text-sm tabular-nums text-muted-foreground">
                     ₹{inr.format(Number(p.initial_capital))} {p.currency}
                   </p>
+                  {p.cash != null && (
+                    <p className="text-xs tabular-nums text-muted-foreground">
+                      Cash ₹{inr.format(Number(p.cash))}
+                    </p>
+                  )}
                   <p className="text-xs text-muted-foreground">
                     Created{" "}
                     {new Date(p.created_at).toLocaleDateString("en-IN", {

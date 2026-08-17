@@ -16,11 +16,14 @@ TEST_SECRET_KEY = "test-secret-key-not-for-production"
 def _patch_settings():
     original_secret = settings.SECRET_KEY
     original_rate_limit = settings.RATE_LIMIT_ENABLED
+    original_matcher = settings.PAPER_MATCHER_ENABLED
     settings.SECRET_KEY = TEST_SECRET_KEY
     settings.RATE_LIMIT_ENABLED = False
+    settings.PAPER_MATCHER_ENABLED = False
     yield
     settings.SECRET_KEY = original_secret
     settings.RATE_LIMIT_ENABLED = original_rate_limit
+    settings.PAPER_MATCHER_ENABLED = original_matcher
 
 
 @pytest.fixture()

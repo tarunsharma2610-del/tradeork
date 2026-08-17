@@ -51,6 +51,7 @@ class PortfolioRepository(BaseRepository[Portfolio]):
             name=name,
             description=description,
             initial_capital=initial_capital,
+            cash=initial_capital,
             currency=currency,
         )
         self.db.add(portfolio)

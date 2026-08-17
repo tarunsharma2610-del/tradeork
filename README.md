@@ -4,7 +4,7 @@ Multi-user SaaS paper-trading platform for Indian markets (NSE, BSE, MCX).
 Architected so the trading engine can later support real broker execution
 (Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.
 
-**Status: Phase 2 — Live market data via WebSocket streaming (Upstox provider).**
+**Status: Phase 3 — Paper-trading execution engine (orders, positions, P&L).**
 
 ## What is implemented
 
@@ -16,9 +16,16 @@ Architected so the trading engine can later support real broker execution
     - Refresh tokens stored hashed, revocable, rotation on every refresh
     - Per-IP rate limiting on auth endpoints (Redis-backed, in-memory fallback)
   - SQLAlchemy 2.0 models + Alembic migrations (`users`, `refresh_tokens`,
-    `audit_logs`, `portfolios`, `instruments`)
+    `audit_logs`, `portfolios`, `instruments`, `orders`, `positions`, `trades`)
   - Portfolios: tenant-scoped CRUD (list/create/get/update/delete), unique name
-    per user, Decimal capital, ownership enforced in the service layer
+    per user, Decimal capital, ownership enforced in the service layer;
+    `cash` tracks the live paper-trading balance
+  - **Paper-trading engine** (`PaperOrderEngine`): MARKET and LIMIT order
+    placement, immediate fill for marketable orders, background matcher that
+    fills resting LIMIT orders when the market crosses, order cancellation,
+    position tracking (signed quantity, VWAP average price, realized/unrealized
+    P&L), and a portfolio summary (cash, equity, P&L). Execution is strictly
+    paper-only — no broker order APIs are invoked.
   - Instruments: reference catalog (NSE/BSE/MCX, equity/futures/options) with
     search (symbol/name, exchange, instrument type) and natural-key dedupe
   - Market data: provider abstraction + clearly-labelled mock provider
@@ -38,10 +45,14 @@ Architected so the trading engine can later support real broker execution
 - **Frontend** (`frontend/`, Next.js 15 + TypeScript + Tailwind + shadcn/ui)
   - Landing page, login, register, dashboard
   - Dashboard: account card, portfolios section (create/delete with inline
-    confirmation), market quotes card (WebSocket streaming with automatic
-    polling fallback, live/mock badge, per-symbol source tag, price sparkline,
-    instrument-catalog search to add symbols), dynamic "Data mode" stat that
-    reflects the actual feed, system status
+    confirmation, cash balance per portfolio), market quotes card (WebSocket
+    streaming with automatic polling fallback, live/mock badge, per-symbol
+    source tag, price sparkline, instrument-catalog search to add symbols),
+    dynamic "Data mode" stat that reflects the actual feed, system status
+  - Dashboard paper-trading panel: trade ticket (instrument search, BUY/SELL,
+    MARKET/LIMIT, quantity, limit price), positions table with unrealized P&L,
+    order list with cancel, and a live summary (cash, equity, realized/
+    unrealized P&L)
   - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)
   - Light + dark themes, responsive layout
 - **Deployment**
@@ -210,7 +221,11 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   deferred. Quotes are cached 2s in Redis and streamed over our own WebSocket.
 - The Upstox access token is expected to be long-lived; automatic re-auth on
   expiry is not implemented yet.
-- Orders, positions, P&L, strategies, backtesting, broker adapters, news, AI
+- Paper execution fills against the quote feed's last price; there is no order
+  book, slippage, or fees model yet.
+- Short selling is allowed without a margin/leverage check (by design for
+  paper trading).
+- Strategies, backtesting, broker adapters, news, AI
   and notifications are the subject of later phases.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).
@@ -236,3 +251,26 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 12. With Upstox credentials configured (`MARKET_DATA_PROVIDER=upstox`), the
     quotes card badge switches to `live · streaming`, rows show `live` tags,
     and the dashboard "Data mode" stat reports `Live`.
+
+## Manual testing checklist (Phase 3)
+
+1. On the dashboard, create a portfolio (or use an existing one) — its row now
+   also shows the running **cash** balance.
+2. **Paper trading** panel → pick the portfolio, search an instrument
+   (e.g. `RELIANCE`), choose **BUY / MARKET**, quantity 10 → **Buy market**.
+   The order fills immediately; the positions table shows qty 10 and the
+   summary's cash drops by the fill cost.
+3. Place a **BUY / LIMIT** order priced below the last quote → it stays
+   `pending`. When the mock market drifts below the limit, the background
+   matcher fills it (refresh to see the status flip to `filled`).
+4. **Sell** some/all of the position → realized P&L accrues; closing a position
+   sets qty to 0 and cash reflects the proceeds.
+5. Open an order list — pending orders expose a cancel action; cancelling
+   flips the status to `cancelled` (filled orders cannot be cancelled).
+6. Place an order with quantity exceeding available cash → it is `rejected`
+   with an "Insufficient cash" reason.
+7. Summary row updates: **Cash**, **Equity**, **Realized/Unrealized P&L**
+   track your trades; equity returns to initial capital when all positions
+   are flat.
+8. Confirm `/docs` lists the trading endpoints
+   (`/portfolios/{id}/orders`, `/positions`, `/summary`).

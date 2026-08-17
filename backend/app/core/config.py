@@ -36,6 +36,12 @@ class Settings(BaseSettings):
     MARKET_DATA_PROVIDER: str = "mock"
     MARKET_DATA_POLL_INTERVAL: float = 2.0
 
+    # Paper trading engine.
+    # Background loop that fills pending LIMIT orders once they become
+    # marketable. Disabled in tests; the loop runs inside the app lifespan.
+    PAPER_MATCHER_ENABLED: bool = True
+    PAPER_MATCHER_INTERVAL: float = 5.0
+
     # Upstox v2 API (live provider). Tokens are long-lived app access tokens;
     # OAuth refresh flow is out of scope for now.
     UPSTOX_API_KEY: str = ""

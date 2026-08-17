@@ -39,10 +39,60 @@ export interface Portfolio {
   name: string;
   description: string | null;
   initial_capital: string;
+  cash: string;
   currency: string;
   status: string;
   created_at: string;
   updated_at: string;
+}
+
+export type OrderSide = "BUY" | "SELL";
+export type OrderType = "MARKET" | "LIMIT";
+
+export interface Order {
+  id: string;
+  portfolio_id: string;
+  instrument_id: string;
+  symbol: string;
+  exchange: string;
+  side: OrderSide;
+  order_type: OrderType;
+  quantity: number;
+  limit_price: string | null;
+  status: string;
+  filled_quantity: number;
+  avg_fill_price: string | null;
+  filled_at: string | null;
+  reject_reason: string | null;
+  created_at: string;
+}
+
+export interface Position {
+  id: string;
+  portfolio_id: string;
+  instrument_id: string;
+  symbol: string;
+  exchange: string;
+  quantity: number;
+  avg_price: string;
+  realized_pnl: string;
+  last_price: string;
+  market_value: string;
+  unrealized_pnl: string;
+  updated_at: string;
+}
+
+export interface PortfolioSummary {
+  portfolio_id: string;
+  name: string;
+  initial_capital: string;
+  cash: string;
+  realized_pnl: string;
+  unrealized_pnl: string;
+  total_pnl: string;
+  equity: string;
+  positions_count: number;
+  open_orders_count: number;
 }
 
 export interface Quote {
@@ -148,6 +198,42 @@ export const api = {
     }, token),
   deletePortfolio: (token: string, id: string) =>
     request<void>(`/portfolios/${id}`, { method: "DELETE" }, token),
+  createOrder: (
+    token: string,
+    portfolioId: string,
+    payload: {
+      instrument_id: string;
+      side: OrderSide;
+      order_type: OrderType;
+      quantity: number;
+      limit_price?: string | null;
+    }
+  ) =>
+    request<Order>(
+      `/portfolios/${portfolioId}/orders`,
+      {
+        method: "POST",
+        body: JSON.stringify(payload),
+      },
+      token
+    ),
+  listOrders: (token: string, portfolioId: string, status?: string) =>
+    request<Order[]>(
+      `/portfolios/${portfolioId}/orders` +
+        (status ? `?status=${encodeURIComponent(status)}` : ""),
+      {},
+      token
+    ),
+  cancelOrder: (token: string, portfolioId: string, orderId: string) =>
+    request<Order>(
+      `/portfolios/${portfolioId}/orders/${orderId}`,
+      { method: "DELETE" },
+      token
+    ),
+  listPositions: (token: string, portfolioId: string) =>
+    request<Position[]>(`/portfolios/${portfolioId}/positions`, {}, token),
+  portfolioSummary: (token: string, portfolioId: string) =>
+    request<PortfolioSummary>(`/portfolios/${portfolioId}/summary`, {}, token),
   getQuotes: (token: string, symbols: string[], exchange: string) =>
     request<Quote[]>(
       `/market/quotes?symbols=${encodeURIComponent(symbols.join(","))}&exchange=${exchange}`,

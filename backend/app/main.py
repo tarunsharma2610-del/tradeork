@@ -1,3 +1,4 @@
+import asyncio
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,12 +9,24 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.redis import close_redis
 from app.services.auth import AuthError
+from app.services.paper_engine import run_paper_matcher
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    yield
-    await close_redis()
+    matcher_task = None
+    if settings.PAPER_MATCHER_ENABLED and settings.ENVIRONMENT != "test":
+        matcher_task = asyncio.create_task(run_paper_matcher())
+    try:
+        yield
+    finally:
+        if matcher_task is not None:
+            matcher_task.cancel()
+            try:
+                await matcher_task
+            except Exception:
+                pass
+        await close_redis()
 
 
 app = FastAPI(

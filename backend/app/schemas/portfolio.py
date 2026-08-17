@@ -31,6 +31,7 @@ class PortfolioRead(BaseModel):
     name: str
     description: str | None
     initial_capital: Decimal
+    cash: Decimal
     currency: str
     status: PortfolioStatus
     created_at: datetime

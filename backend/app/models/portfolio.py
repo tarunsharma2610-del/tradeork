@@ -32,6 +32,11 @@ class Portfolio(Base):
     initial_capital: Mapped[Decimal] = mapped_column(
         Numeric(18, 2), nullable=False
     )
+    # Available paper cash. Starts equal to initial_capital and moves with
+    # fills (BUY debits, SELL credits). Equity = cash + open position value.
+    cash: Mapped[Decimal] = mapped_column(
+        Numeric(18, 2), nullable=False, default=Decimal("0"), server_default="0"
+    )
     currency: Mapped[str] = mapped_column(
         String(8), default="INR", nullable=False
     )

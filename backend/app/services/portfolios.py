@@ -62,6 +62,9 @@ class PortfolioService:
         if data.description is not None:
             portfolio.description = data.description
         if data.initial_capital is not None:
+            portfolio.cash = portfolio.cash + (
+                data.initial_capital - portfolio.initial_capital
+            )
             portfolio.initial_capital = data.initial_capital
         if data.status is not None:
             portfolio.status = data.status.value

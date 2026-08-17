@@ -29,3 +29,21 @@ class OptionType(StrEnum):
 class PortfolioStatus(StrEnum):
     ACTIVE = "active"
     ARCHIVED = "archived"
+
+
+class OrderSide(StrEnum):
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+class OrderType(StrEnum):
+    MARKET = "MARKET"
+    LIMIT = "LIMIT"
+
+
+class OrderStatus(StrEnum):
+    PENDING = "pending"
+    PARTIALLY_FILLED = "partially_filled"
+    FILLED = "filled"
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
