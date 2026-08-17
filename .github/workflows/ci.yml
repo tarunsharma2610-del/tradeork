@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  backend:
+    name: Backend (lint + test + migrations)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: tradeork
+          POSTGRES_PASSWORD: tradeork
+          POSTGRES_DB: tradeork
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U tradeork"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install backend dependencies
+        working-directory: backend
+        run: pip install -e ".[dev]"
+      - name: Lint
+        working-directory: backend
+        run: ruff check app tests
+      - name: Test
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://tradeork:tradeork@localhost:5432/tradeork
+          REDIS_URL: redis://localhost:6379/0
+          SECRET_KEY: ci-secret-key-longer-than-32-bytes-for-tests
+          ENVIRONMENT: test
+        run: pytest
+      - name: Migrations
+        working-directory: backend
+        env:
+          DATABASE_URL: postgresql+psycopg://tradeork:tradeork@localhost:5432/tradeork
+          SECRET_KEY: ci-secret-key-longer-than-32-bytes-for-tests
+          ENVIRONMENT: test
+        run: |
+          alembic upgrade head
+          alembic downgrade base
+          alembic upgrade head
+
+  frontend:
+    name: Frontend (typecheck + lint + build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Typecheck
+        working-directory: frontend
+        run: npm run typecheck
+      - name: Lint
+        working-directory: frontend
+        run: npm run lint
+      - name: Build
+        working-directory: frontend
+        run: npm run build

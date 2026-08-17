@@ -1,0 +1,68 @@
+from datetime import timedelta
+from functools import lru_cache
+from typing import Any
+
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
+    PROJECT_NAME: str = "Tradeork"
+    API_V1_PREFIX: str = "/api/v1"
+    ENVIRONMENT: str = "development"
+    LOG_LEVEL: str = "INFO"
+
+    DATABASE_URL: str = (
+        "postgresql+psycopg://tradeork:tradeork@db:5432/tradeork"
+    )
+    REDIS_URL: str = "redis://redis:6379/0"
+
+    SECRET_KEY: str = "change-me-in-production"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    BACKEND_CORS_ORIGINS: list[str] = ["http://localhost:3000"]
+
+    RATE_LIMIT_ENABLED: bool = True
+
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    @classmethod
+    def _parse_cors_origins(cls, v: Any) -> Any:
+        if isinstance(v, str) and not v.startswith("["):
+            return [item.strip() for item in v.split(",") if item.strip()]
+        return v
+
+    @field_validator("SECRET_KEY")
+    @classmethod
+    def _enforce_secret_in_production(cls, v: str, info: Any) -> str:
+        if info.data.get("ENVIRONMENT") == "production":
+            if v == "change-me-in-production":
+                raise ValueError(
+                    "SECRET_KEY must be replaced with a strong random value in production"
+                )
+            if len(v) < 32:
+                raise ValueError(
+                    "SECRET_KEY must be at least 32 characters long in production"
+                )
+        return v
+
+    @property
+    def access_token_expires(self) -> timedelta:
+        return timedelta(minutes=self.ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    @property
+    def refresh_token_expires(self) -> timedelta:
+        return timedelta(days=self.REFRESH_TOKEN_EXPIRE_DAYS)
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

@@ -1,0 +1,179 @@
+[1mdiff --git a/README.md b/README.md[m
+[1mindex f02f90a..5caea07 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -1,2 +1,172 @@[m
+[31m-# tradeork[m
+[31m-trading app test[m
+[32m+[m[32m# Tradeork[m
+[32m+[m
+[32m+[m[32mMulti-user SaaS paper-trading platform for Indian markets (NSE, BSE, MCX).[m
+[32m+[m[32mArchitected so the trading engine can later support real broker execution[m
+[32m+[m[32m(Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.[m
+[32m+[m
+[32m+[m[32m**Status: Phase 1 — Portfolios, instruments + market data foundation.**[m
+[32m+[m
+[32m+[m[32m## What is implemented[m
+[32m+[m
+[32m+[m[32m- **Backend** (`backend/`, Python 3.11 + FastAPI)[m
+[32m+[m[32m  - Modular architecture: `core` / `api` / `models` / `schemas` / `services` / `repositories`[m
+[32m+[m[32m  - Auth skeleton: registration, login, refresh-token rotation, logout[m
+[32m+[m[32m    - Argon2id password hashing[m
+[32m+[m[32m    - Short-lived access JWT (Authorization header) + opaque httpOnly refresh cookie[m
+[32m+[m[32m    - Refresh tokens stored hashed, revocable, rotation on every refresh[m
+[32m+[m[32m    - Per-IP rate limiting on auth endpoints (Redis-backed, in-memory fallback)[m
+[32m+[m[32m  - SQLAlchemy 2.0 models + Alembic migrations (`users`, `refresh_tokens`,[m
+[32m+[m[32m    `audit_logs`, `portfolios`, `instruments`)[m
+[32m+[m[32m  - Portfolios: tenant-scoped CRUD (list/create/get/update/delete), unique name[m
+[32m+[m[32m    per user, Decimal capital, ownership enforced in the service layer[m
+[32m+[m[32m  - Instruments: reference catalog (NSE/BSE/MCX, equity/futures/options) with[m
+[32m+[m[32m    search (symbol/name, exchange, instrument type) and natural-key dedupe[m
+[32m+[m[32m  - Market data foundation: provider abstraction + clearly-labelled mock[m
+[32m+[m[32m    provider (`is_mock: true`, `source: "mock"`), Redis-cached quotes (TTL 2s)[m
+[32m+[m[32m    that degrade gracefully to provider-only[m
+[32m+[m[32m  - Seed script (`python -m app.seed`) for the reference instrument catalog[m
+[32m+[m[32m  - Audit logging for security-relevant events[m
+[32m+[m[32m  - Health endpoint reporting DB + Redis status[m
+[32m+[m[32m  - Typed request/response models, consistent error responses, versioned API (`/api/v1`)[m
+[32m+[m[32m- **Frontend** (`frontend/`, Next.js 15 + TypeScript + Tailwind + shadcn/ui)[m
+[32m+[m[32m  - Landing page, login, register, dashboard[m
+[32m+[m[32m  - Dashboard: account card, portfolios section (create/delete), market quotes[m
+[32m+[m[32m    card (live simulated quotes, mock-labelled), system status[m
+[32m+[m[32m  - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)[m
+[32m+[m[32m  - Light + dark themes, responsive layout[m
+[32m+[m[32m- **Deployment**[m
+[32m+[m[32m  - Dockerfiles for backend and frontend[m
+[32m+[m[32m  - `docker-compose.yml`: PostgreSQL 16, Redis 7, backend, frontend, Nginx[m
+[32m+[m[32m  - Nginx terminates at port 80 and routes `/` → frontend, `/api/` → backend (WebSocket upgrade ready)[m
+[32m+[m[32m- **CI** (`.github/workflows/ci.yml`)[m
+[32m+[m[32m  - Backend: ruff lint, pytest against real Postgres + Redis, migration up/down/up[m
+[32m+[m[32m  - Frontend: typecheck, eslint, production build[m
+[32m+[m
+[32m+[m[32m## Repository layout[m
+[32m+[m
+[32m+[m[32m```[m
+[32m+[m[32m.[m
+[32m+[m[32m├── backend/[m
+[32m+[m[32m│   ├── alembic/            # migrations[m
+[32m+[m[32m│   ├── app/[m
+[32m+[m[32m│   │   ├── core/           # config, database, redis, security, rate limit[m
+[32m+[m[32m│   │   ├── api/v1/         # routers + endpoints (auth, users, health, portfolios, instruments, market)[m
+[32m+[m[32m│   │   ├── models/         # SQLAlchemy models[m
+[32m+[m[32m│   │   ├── schemas/        # Pydantic request/response models[m
+[32m+[m[32m│   │   ├── services/       # business logic (portfolios, instruments, market data)[m
+[32m+[m[32m│   │   └── repositories/   # data access[m
+[32m+[m[32m│   └── tests/[m
+[32m+[m[32m├── frontend/[m
+[32m+[m[32m│   └── src/[m
+[32m+[m[32m│       ├── app/            # pages (landing, login, register, dashboard)[m
+[32m+[m[32m│       ├── components/     # shadcn/ui primitives + theme[m
+[32m+[m[32m│       └── lib/            # api client, auth context[m
+[32m+[m[32m├── nginx/nginx.conf[m
+[32m+[m[32m├── docker-compose.yml[m
+[32m+[m[32m└── .github/workflows/ci.yml[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## Run it[m
+[32m+[m
+[32m+[m[32m### Option A — Docker Compose (recommended)[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32mcp .env.example .env          # adjust SECRET_KEY in production[m
+[32m+[m[32mdocker compose up --build[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m- Frontend + API: `http://localhost` (Nginx routes `/api/*` to the backend)[m
+[32m+[m[32m- API docs: `http://localhost/api/v1/openapi.json`[m
+[32m+[m[32m- FastAPI docs (direct): `http://localhost:8000/docs`[m
+[32m+[m[32m- PostgreSQL on `5432`, Redis on `6379`[m
+[32m+[m
+[32m+[m[32mMigrations run automatically on backend container start (`alembic upgrade head`).[m
+[32m+[m
+[32m+[m[32mThe instrument catalog is reference data only and is never fetched from a[m
+[32m+[m[32mbroker. Seed it once (or re-run to update non-destructively):[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32mcd backend[m
+[32m+[m[32mpython -m app.seed                 # all exchanges[m
+[32m+[m[32mpython -m app.seed --exchange NSE  # single exchange[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m### Option B — Local development[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32m# 1. Start infrastructure[m
+[32m+[m[32mdocker compose up db redis[m
+[32m+[m
+[32m+[m[32m# 2. Backend (http://localhost:8000)[m
+[32m+[m[32mcd backend[m
+[32m+[m[32mpython -m venv .venv && source .venv/bin/activate[m
+[32m+[m[32mpip install -e ".[dev]"[m
+[32m+[m[32malembic upgrade head[m
+[32m+[m[32muvicorn app.main:app --reload[m
+[32m+[m
+[32m+[m[32m# 3. Frontend (http://localhost:3000)[m
+[32m+[m[32mcd frontend[m
+[32m+[m[32mnpm install[m
+[32m+[m[32mNEXT_PUBLIC_API_BASE_URL=http://localhost:8000 npm run dev[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32mThe frontend proxies `/api/*` to the backend so you can always use[m
+[32m+[m[32m`http://localhost:3000/api/v1/...`.[m
+[32m+[m
+[32m+[m[32m## Verify[m
+[32m+[m
+[32m+[m[32m```bash[m
+[32m+[m[32m# Backend[m
+[32m+[m[32mcd backend && pytest && ruff check app tests[m
+[32m+[m
+[32m+[m[32m# Frontend[m
+[32m+[m[32mcd frontend && npm run typecheck && npm run lint && npm run build[m
+[32m+[m[32m```[m
+[32m+[m
+[32m+[m[32m## Security notes[m
+[32m+[m
+[32m+[m[32m- Access tokens are returned in the response body and must be kept in memory by the SPA[m
+[32m+[m[32m  (they are not stored in `localStorage`/`sessionStorage`).[m
+[32m+[m[32m- Refresh tokens are set as `httpOnly` cookies; `Secure` is enabled when[m
+[32m+[m[32m  `ENVIRONMENT=production`.[m
+[32m+[m[32m- `SECRET_KEY` is validated at startup: production refuses the placeholder value[m
+[32m+[m[32m  and any key shorter than 32 characters.[m
+[32m+[m[32m- CSRF: the API is bearer-token based (no cookie-authenticated state-changing[m
+[32m+[m[32m  requests), so CSRF protection applies once cookie-based flows are introduced.[m
+[32m+[m[32m- No broker credentials are stored or handled anywhere yet.[m
+[32m+[m[32m- Portfolio ownership is enforced server-side (never trusted from the request[m
+[32m+[m[32m  body); a user cannot read or mutate another tenant's portfolios.[m
+[32m+[m[32m- All market data is simulated and explicitly labelled (`is_mock: true`); the[m
+[32m+[m[32m  provider abstraction ensures real feeds cannot be mistaken for mock data.[m
+[32m+[m
+[32m+[m[32m## Known limitations / deferred to later phases[m
+[32m+[m
+[32m+[m[32m- Docker cannot be exercised in the current sandbox; the compose file and[m
+[32m+[m[32m  Dockerfiles are authored and YAML-validated but not yet built here.[m
+[32m+[m[32m- Local verification used SQLite; the CI pipeline runs the full Postgres + Redis[m
+[32m+[m[32m  migration and test path.[m
+[32m+[m[32m- Auth session is in-memory on the frontend: a page reload loses the access[m
+[32m+[m[32m  token (refresh-cookie flow is implemented server-side and will be wired up).[m
+[32m+[m[32m- No email verification, MFA/2FA, password reset yet (skeleton only).[m
+[32m+[m[32m- The instrument catalog is static reference data seeded into the DB; real[m
+[32m+[m[32m  instrument-master synchronisation from a broker/exchange feed is deferred.[m
+[32m+[m[32m- Market quotes are synthetic (`MockMarketDataProvider`); no real tick data or[m
+[32m+[m[32m  WebSocket streaming yet. Quotes are cached 2s in Redis.[m
+[32m+[m[32m- Orders, positions, P&L, strategies, backtesting, broker adapters, news, AI[m
+[32m+[m[32m  and notifications are the subject of later phases.[m
+[32m+[m[32m- Rate limiting falls back to in-memory when Redis is unreachable (single-node[m
+[32m+[m[32m  only; not for multi-instance deployments).[m
+[32m+[m
+[32m+[m[32m## Manual testing checklist (Phase 1)[m
+[32m+[m
+[32m+[m[32m1. Register a new account → lands on dashboard, shows account details.[m
+[32m+[m[32m2. Dashboard → **Portfolios**: create one (name + capital), it appears in the list.[m
+[32m+[m[32m3. Create a second portfolio with the same name → friendly 409 error shown.[m
+[32m+[m[32m4. Dashboard → **Market quotes**: default `RELIANCE,TCS,NIFTY` loads mock quotes[m
+[32m+[m[32m   (each row tagged `mock`); change symbols and refresh.[m
+[32m+[m[32m5. Request an unknown symbol (e.g. `ZZZZ`) → friendly 404 error shown.[m
+[32m+[m[32m6. Delete a portfolio → it disappears from the list.[m
+[32m+[m[32m7. Sign out → returns to login; login again → portfolios still listed.[m
+[32m+[m[32m8. Direct hit on `/api/v1/portfolios` or `/api/v1/market/quotes` without a token → 401.[m
+[32m+[m[32m9. With Docker: `docker compose up --build` then repeat the above via `http://localhost`.[m
+[32m+[m[32m10. Confirm `/docs` renders the OpenAPI schema for the new endpoints.[m
