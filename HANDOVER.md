@@ -384,6 +384,25 @@ lower priority than the user's new requests above), in suggested order:
 If the user instead asks for a different feature, treat that as the next step
 and update this file accordingly.
 
+## Final deployment requirement (MANDATORY)
+
+**Once the project is feature-complete, it MUST be deployed to the user's
+Oracle Cloud free-tier Ubuntu server.** This is the required end state — local
+sandbox and Docker Compose are only for development/verification. The full
+procedure (create Ampere A1 VM, open port 80, install Docker, clone, set
+`.env`, `docker compose up -d --build`, seed, update flow) is documented in
+README.md under "Deploy to Oracle Cloud (final destination)". Follow that
+section verbatim when the time comes.
+
+Two deployment gotchas to keep in mind:
+- `docker-compose.yml` does NOT currently pass `BROKER_ADAPTER` /
+  `LIVE_EXECUTION_ENABLED` / `UPSTOX_BROKER_PRODUCT` to the backend container.
+  If live execution is part of the finished product, add those env vars to the
+  backend service in `docker-compose.yml` (and document them in `.env.example`).
+- After deploying, verify `http://<PUBLIC_IP>/api/v1/health` reports
+  `database: ok` + `redis: ok` (it shows "degraded" only in the Redis-less
+  sandbox).
+
 ## Conventions & gotchas
 
 - Strict PAPER/LIVE separation: paper engine must never call broker order APIs.

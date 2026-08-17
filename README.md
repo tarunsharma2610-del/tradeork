@@ -250,6 +250,56 @@ cd frontend && npm run typecheck && npm run lint && npm run build
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).
 
+## Deploy to Oracle Cloud (final destination)
+
+**After the project is feature-complete, it MUST be uploaded and run on the
+user's Oracle Cloud free-tier Ubuntu server.** This is the required target
+environment for the finished product — local sandbox and Docker Compose are
+only for development/verification.
+
+### Target VM
+
+- Oracle Cloud Free Tier — **Ampere A1 (ARM)**, Ubuntu 22.04/24.04, ≥2 OCPU /
+  ≥4 GB RAM.
+- In the console's security list / NSG, open **TCP 80** (and 443 if using TLS)
+  to `0.0.0.0/0`; keep SSH open for administration.
+
+### Steps
+
+```bash
+ssh ubuntu@<PUBLIC_IP>
+
+# Install Docker
+sudo apt-get update
+sudo apt-get install -y docker.io docker-compose-v2 git
+sudo usermod -aG docker ubuntu          # re-login after this
+
+# Clone + configure
+git clone https://github.com/tarunsharma2610-del/tradeork.git
+cd tradeork
+cp .env.example .env
+# .env: ENVIRONMENT=production, SECRET_KEY=<openssl rand -hex 32>,
+#       BACKEND_CORS_ORIGINS=http://<PUBLIC_IP> (or domain)
+
+# Launch
+sudo docker compose up -d --build
+sudo docker compose ps                  # all 5 services Up/healthy
+
+# Seed instrument catalog once
+sudo docker compose exec backend python -m app.seed
+```
+
+- Site: `http://<PUBLIC_IP>/` · API docs: `http://<PUBLIC_IP>/api/v1/openapi.json`
+- Health: `http://<PUBLIC_IP>/api/v1/health` → `database: ok`, `redis: ok`
+  (Healthy — unlike the sandbox, Redis and Postgres run here).
+- Updates: `git pull && sudo docker compose up -d --build` (migrations run
+  automatically on backend start).
+- **Compose gap:** `docker-compose.yml` currently does NOT pass
+  `BROKER_ADAPTER` / `LIVE_EXECUTION_ENABLED` / `UPSTOX_BROKER_PRODUCT` to the
+  backend container (only market-data provider + Upstox quotes creds). Add
+  those env vars to the backend service in `docker-compose.yml` if live
+  execution is needed on the server.
+
 ## Manual testing checklist (Phase 1)
 
 1. Register a new account → lands on dashboard, shows account details.
