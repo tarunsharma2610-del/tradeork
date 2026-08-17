@@ -17,7 +17,7 @@ const inr = new Intl.NumberFormat("en-IN", {
 });
 
 export default function DashboardPage() {
-  const { user, tokens } = useAuth();
+  const { user, tokens, restoring } = useAuth();
   const router = useRouter();
   const [portfolios, setPortfolios] = React.useState<Portfolio[]>([]);
   const [health, setHealth] = React.useState<string | null>(null);
@@ -25,10 +25,10 @@ export default function DashboardPage() {
   const token = tokens?.access_token ?? null;
 
   React.useEffect(() => {
-    if (!user) {
+    if (!restoring && !user) {
       router.replace("/login");
     }
-  }, [user, router]);
+  }, [user, restoring, router]);
 
   React.useEffect(() => {
     if (!token) return;
@@ -77,6 +77,14 @@ export default function DashboardPage() {
       icon: statIcons.Activity,
     },
   ];
+
+  if (restoring) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking your session…</p>
+      </main>
+    );
+  }
 
   return (
     <main className="flex min-h-dvh flex-col bg-background">

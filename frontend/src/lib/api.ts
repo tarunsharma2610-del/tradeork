@@ -108,15 +108,17 @@ export const api = {
       method: "POST",
       body: JSON.stringify(payload),
     }),
-  logout: (refreshToken: string) =>
+  logout: () =>
     request<void>("/auth/logout", {
       method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify({}),
     }),
-  refresh: (refreshToken: string) =>
+  refresh: (refreshToken?: string) =>
     request<AuthTokens>("/auth/refresh", {
       method: "POST",
-      body: JSON.stringify({ refresh_token: refreshToken }),
+      body: JSON.stringify(
+        refreshToken ? { refresh_token: refreshToken } : {}
+      ),
     }),
   me: (token: string) => request<User>("/users/me", {}, token),
   listPortfolios: (token: string) =>

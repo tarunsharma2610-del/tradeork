@@ -19,7 +19,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/lib/auth";
 
 export default function RegisterPage() {
-  const { register, user } = useAuth();
+  const { register, user, restoring } = useAuth();
   const router = useRouter();
   const [fullName, setFullName] = React.useState("");
   const [email, setEmail] = React.useState("");
@@ -29,10 +29,11 @@ export default function RegisterPage() {
   const [loading, setLoading] = React.useState(false);
 
   React.useEffect(() => {
+    if (restoring) return;
     if (user) {
       router.replace("/dashboard");
     }
-  }, [user, router]);
+  }, [user, restoring, router]);
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -50,6 +51,14 @@ export default function RegisterPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  if (restoring) {
+    return (
+      <main className="flex min-h-dvh items-center justify-center bg-background">
+        <p className="text-sm text-muted-foreground">Checking your session…</p>
+      </main>
+    );
   }
 
   return (
