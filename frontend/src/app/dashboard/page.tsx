@@ -1,5 +1,6 @@
 "use client";
 
+import { CandlestickChart, LayoutGrid, LineChart, UserRound } from "lucide-react";
 import { useRouter } from "next/navigation";
 import * as React from "react";
 
@@ -18,6 +19,15 @@ const inr = new Intl.NumberFormat("en-IN", {
   maximumFractionDigits: 2,
 });
 
+type Tab = "trading" | "portfolios" | "strategies" | "account";
+
+const tabs: { id: Tab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+  { id: "trading", label: "Trading", icon: CandlestickChart },
+  { id: "portfolios", label: "Portfolios & Quotes", icon: LayoutGrid },
+  { id: "strategies", label: "Strategies", icon: LineChart },
+  { id: "account", label: "Account", icon: UserRound },
+];
+
 export default function DashboardPage() {
   const { user, tokens, restoring } = useAuth();
   const router = useRouter();
@@ -28,6 +38,7 @@ export default function DashboardPage() {
     isMock: boolean | null;
     source: string | null;
   } | null>(null);
+  const [activeTab, setActiveTab] = React.useState<Tab>("trading");
 
   const token = tokens?.access_token ?? null;
 
@@ -118,42 +129,80 @@ export default function DashboardPage() {
 
         <StatGrid items={stats} />
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <nav
+          aria-label="Dashboard sections"
+          className="flex flex-wrap gap-1 rounded-lg border bg-muted/40 p-1"
+        >
+          {tabs.map((tab) => {
+            const Icon = tab.icon;
+            const isActive = activeTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setActiveTab(tab.id)}
+                aria-current={isActive ? "page" : undefined}
+                className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  isActive
+                    ? "bg-background text-foreground shadow-sm"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className={activeTab === tab.id ? "" : "hidden sm:inline"}>
+                  {tab.label}
+                </span>
+              </button>
+            );
+          })}
+        </nav>
+
+        <div className={activeTab === "trading" ? "" : "hidden"}>
+          <TradingPanel token={token} portfolios={portfolios} />
+        </div>
+
+        <div
+          className={`grid gap-6 lg:grid-cols-2 ${
+            activeTab === "portfolios" ? "" : "hidden"
+          }`}
+        >
           <PortfoliosSection token={token} />
           <MarketQuotesCard token={token} onFeedInfo={setFeedInfo} />
         </div>
 
-        <TradingPanel token={token} portfolios={portfolios} />
+        <div className={activeTab === "strategies" ? "" : "hidden"}>
+          <StrategiesPanel token={token} portfolios={portfolios} />
+        </div>
 
-        <StrategiesPanel token={token} portfolios={portfolios} />
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Account</CardTitle>
-            <CardDescription>
-              Signed in as {user?.email}
-              {user?.full_name ? ` (${user.full_name})` : ""}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-3">
-            <p className="flex flex-col">
-              <span className="text-xs text-muted-foreground">Account ID</span>
-              <code className="mt-0.5 rounded bg-muted px-1.5 py-0.5">
-                {user?.id}
-              </code>
-            </p>
-            <p className="flex flex-col">
-              <span className="text-xs text-muted-foreground">Status</span>
-              <span>{user?.is_active ? "Active" : "Disabled"}</span>
-            </p>
-            <p className="flex flex-col">
-              <span className="text-xs text-muted-foreground">Member since</span>
-              <span>
-                {user ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"}
-              </span>
-            </p>
-          </CardContent>
-        </Card>
+        <div className={activeTab === "account" ? "" : "hidden"}>
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Account</CardTitle>
+              <CardDescription>
+                Signed in as {user?.email}
+                {user?.full_name ? ` (${user.full_name})` : ""}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-x-8 gap-y-2 text-sm sm:grid-cols-3">
+              <p className="flex flex-col">
+                <span className="text-xs text-muted-foreground">Account ID</span>
+                <code className="mt-0.5 rounded bg-muted px-1.5 py-0.5">
+                  {user?.id}
+                </code>
+              </p>
+              <p className="flex flex-col">
+                <span className="text-xs text-muted-foreground">Status</span>
+                <span>{user?.is_active ? "Active" : "Disabled"}</span>
+              </p>
+              <p className="flex flex-col">
+                <span className="text-xs text-muted-foreground">Member since</span>
+                <span>
+                  {user ? new Date(user.created_at).toLocaleDateString("en-IN") : "—"}
+                </span>
+              </p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </main>
   );

@@ -74,7 +74,9 @@ order APIs.
 Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
 adapter) are DONE. Settings UI with the paper/live portfolio switch is DONE.
 Per-portfolio Strategies CRUD (backend + dashboard panel) is DONE. Per-user
-broker connections (Settings → "Add Upstox API") are DONE. Paper engine
+broker connections (Settings → "Add Upstox API") are DONE. Dashboard
+discoverability (user-feedback item 4: tabbed dashboard with Trading front and
+center + prominent Register entry on login) is DONE. Paper engine
 remains untouched as the source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
@@ -94,10 +96,17 @@ the Settings page (add / update token / disconnect), and live-execution
 resolution through the user's own stored credentials
 (`broker_factory.get_broker_for_user`, used by `trading._execution_for`).
 
+**Later same session (user-feedback item 4 — dashboard discoverability):**
+Reworked `/dashboard` into a tabbed workspace — **Trading** (default, front
+and center), **Portfolios & Quotes**, **Strategies**, **Account**. Panels stay
+mounted (CSS `hidden`) so the WebSocket quote feed and "Data mode" stat keep
+updating across tab switches. The login page now shows a prominent **"Create a
+free account"** button (was a subtle text link) so Register is discoverable.
+
 Backend tests now **132 passing**; frontend typecheck/lint/build green; the
 migration chain `0001 → 0006` up/down/up verifies. See "Session 2026-08-19
-(Strategies)" and "Session 2026-08-19 (Broker connections)" under "What has
-been done".
+(Strategies)", "Session 2026-08-19 (Broker connections)" and "Session
+2026-08-19 (Dashboard discoverability)" under "What has been done".
 
 ## How to continue WITHOUT burning your token budget
 
@@ -333,6 +342,22 @@ the previous session left as the next step.
   migration `0001 → 0006` up/down/up verified; frontend typecheck/lint/build
   green.
 
+### Session 2026-08-19 — dashboard discoverability (user-feedback item 4)
+Trading was buried below the portfolios/quotes grid; the user asked that
+order-placing/fills be discoverable and Register be visible.
+
+- `/dashboard` (`frontend/src/app/dashboard/page.tsx`) now has a lightweight
+  state-based **tab bar** (no new dependency): **Trading** (default, front and
+  center) · **Portfolios & Quotes** · **Strategies** · **Account**. Icons from
+  `lucide-react`; active tab gets a pill highlight; `aria-current` set.
+- Panels are kept **mounted** and hidden with the CSS `hidden` class rather
+  than unmounted, so the market WebSocket feed keeps streaming and the "Data
+  mode" stat keeps updating whichever tab is active.
+- Login page (`frontend/src/app/(auth)/login/page.tsx`): replaced the subtle
+  "No account? Create one" text link with a divider + full-width
+  **"Create a free account"** outline button linking to `/register`.
+- Frontend typecheck/lint/build green (no backend change).
+
 ## Verification commands
 
 ```bash
@@ -416,17 +441,18 @@ Notes:
 >    flow** (auth-code exchange, token refresh) is still out of scope — tokens
 >    are entered manually as long-lived access tokens (see Phase 4 remaining
 >    items below).
-> 4. **Order placing / paper fills are not discoverable** — the `TradingPanel`
->    exists and works (trade ticket, positions, orders, fills, cancel) but sits
->    below the fold on `/dashboard` behind the portfolios/quotes grid. Consider
->    tabbed/nav structure on the dashboard so trading is front and center, and
->    a visible Register entry point (register page already exists at `/register`;
->    the user did not see it). **NEXT.**
-> 5. **Remove/hide backend-health diagnostics from the user dashboard.** The
+> 4. **Order placing / paper fills are not discoverable** — ✅ DONE (2026-08-19):
+>    the dashboard is now a tabbed workspace with **Trading** as the default
+>    front-and-center tab (Portfolios & Quotes / Strategies / Account follow);
+>    the login page gained a prominent **"Create a free account"** button so
+>    Register is visible.
+> 5. **Remove/hide backend-health diagnostics from the user dashboard.** **NEXT.**
+>    The
 >    "Platform" stat (shows `Degraded` because Redis is absent in the sandbox)
 >    and arguably the "Data mode" stat are dev-facing noise, not user features:
 >    `dashboard/page.tsx` calls `GET /api/v1/health` and renders DB/Redis status
->    (`dashboard/page.tsx:47-52`), and "Data mode" renders `feedInfo` from the
+>    (dashboard is tabbed now but the Platform/Data-mode stats are still shown),
+>    and "Data mode" renders `feedInfo` from the
 >    quotes card. Recommended: drop the Platform stat entirely, or gate it (and
 >    Data mode) behind `ENVIRONMENT=development` so end users only see trading
 >    info. `LIVE`/`Mock` labels on the quotes card itself are fine to keep.
@@ -441,7 +467,7 @@ Notes:
 >
 > Suggested execution order: ~~Settings page + header link~~ (DONE) →
 > ~~Strategies feature (full stack)~~ (DONE) → ~~broker token store~~ (DONE) →
-> dashboard discoverability/register entry point (item 4) → dashboard
+> ~~dashboard discoverability/register entry point~~ (DONE) → dashboard
 > diagnostic cleanup (item 5) → autotrade flag (item 6). Update this file +
 > README in the same commit as always.
 

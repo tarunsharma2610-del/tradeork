@@ -112,15 +112,19 @@ export default function LoginPage() {
                 {loading ? "Signing in…" : "Sign in"}
               </Button>
             </form>
-            <p className="mt-6 text-center text-sm text-muted-foreground">
-              No account?{" "}
-              <Link
-                href="/register"
-                className="font-medium text-primary underline-offset-4 hover:underline"
-              >
-                Create one
-              </Link>
-            </p>
+            <div className="mt-6 flex flex-col items-center gap-3">
+              <div className="flex w-full items-center gap-3 text-xs text-muted-foreground">
+                <span className="h-px flex-1 bg-border" />
+                New to Tradeork?
+                <span className="h-px flex-1 bg-border" />
+              </div>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/register">Create a free account</Link>
+              </Button>
+              <p className="text-center text-sm text-muted-foreground">
+                Paper trading for NSE · BSE · MCX — no brokerage account needed.
+              </p>
+            </div>
           </CardContent>
         </Card>
       </section>

@@ -61,7 +61,11 @@ paper/live switch.**
     confirmation, cash balance per portfolio), market quotes card (WebSocket
     streaming with automatic polling fallback, live/mock badge, per-symbol
     source tag, price sparkline, instrument-catalog search to add symbols),
-    dynamic "Data mode" stat that reflects the actual feed, system status
+    dynamic "Data mode" stat that reflects the actual feed, system status.
+    The dashboard is a **tabbed workspace**: **Trading** (default, front and
+    center) · **Portfolios & Quotes** · **Strategies** · **Account** — the
+    panels stay mounted so the quote stream keeps running when you switch
+    tabs.
   - Dashboard paper-trading panel: trade ticket (instrument search, BUY/SELL,
     MARKET/LIMIT, quantity, limit price), positions table with unrealized P&L,
     order list with cancel, and a live summary (cash, equity, realized/
@@ -331,7 +335,11 @@ sudo docker compose exec backend python -m app.seed
 ## Manual testing checklist (Phase 1)
 
 1. Register a new account → lands on dashboard, shows account details.
-2. Dashboard → **Portfolios**: create one (name + capital), it appears in the list.
+   (The login page's "Create a free account" button leads here.)
+2. Dashboard → the default **Trading** tab is front and center: trade ticket,
+   positions, orders, summary. Switch to **Portfolios & Quotes** to create a
+   portfolio (name + capital); it appears in the list and in the trading
+   panel's portfolio picker.
 3. Create a second portfolio with the same name → friendly 409 error shown.
 4. Dashboard → **Market quotes**: default `RELIANCE,TCS,NIFTY` loads quotes;
    the badge shows `mock · streaming` when connected over WebSocket (or
