@@ -59,3 +59,24 @@ class OrderStatus(StrEnum):
     FILLED = "filled"
     CANCELLED = "cancelled"
     REJECTED = "rejected"
+
+
+class StrategyType(StrEnum):
+    """Kind of strategy. ``manual`` covers user-defined rules entered directly
+    in the UI; the named types map to the built-in engines planned in the
+    roadmap (Phase 7) and are stored now so strategies stay forward-compatible.
+    """
+
+    MANUAL = "manual"
+    RSI = "rsi"
+    EMA_CROSSOVER = "ema_crossover"
+    VWAP = "vwap"
+    SUPERTREND = "supertrend"
+    BREAKOUT = "breakout"
+    CUSTOM = "custom"
+
+
+class StrategyStatus(StrEnum):
+    ACTIVE = "active"
+    INACTIVE = "inactive"
+    ARCHIVED = "archived"

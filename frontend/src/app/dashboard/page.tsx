@@ -7,6 +7,7 @@ import { DashboardHeader } from "@/components/dashboard-header";
 import { MarketQuotesCard } from "@/components/market-quotes-card";
 import { PortfoliosSection } from "@/components/portfolios-section";
 import { StatGrid, type StatItem, statIcons } from "@/components/stat-cards";
+import { StrategiesPanel } from "@/components/strategies-panel";
 import { TradingPanel } from "@/components/trading-panel";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { api, type Portfolio } from "@/lib/api";
@@ -123,6 +124,8 @@ export default function DashboardPage() {
         </div>
 
         <TradingPanel token={token} portfolios={portfolios} />
+
+        <StrategiesPanel token={token} portfolios={portfolios} />
 
         <Card>
           <CardHeader>

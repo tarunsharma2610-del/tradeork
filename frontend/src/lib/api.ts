@@ -106,6 +106,29 @@ export interface PortfolioSummary {
   open_orders_count: number;
 }
 
+export type StrategyType =
+  | "manual"
+  | "rsi"
+  | "ema_crossover"
+  | "vwap"
+  | "supertrend"
+  | "breakout"
+  | "custom";
+export type StrategyStatus = "active" | "inactive" | "archived";
+
+export interface Strategy {
+  id: string;
+  user_id: string;
+  portfolio_id: string;
+  name: string;
+  description: string | null;
+  strategy_type: StrategyType;
+  parameters: Record<string, unknown>;
+  status: StrategyStatus;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Quote {
   symbol: string;
   exchange: string;
@@ -266,6 +289,56 @@ export const api = {
     request<Position[]>(`/portfolios/${portfolioId}/positions`, {}, token),
   portfolioSummary: (token: string, portfolioId: string) =>
     request<PortfolioSummary>(`/portfolios/${portfolioId}/summary`, {}, token),
+  listStrategies: (token: string, portfolioId: string, status?: string) =>
+    request<Strategy[]>(
+      `/portfolios/${portfolioId}/strategies` +
+        (status ? `?status=${encodeURIComponent(status)}` : ""),
+      {},
+      token
+    ),
+  createStrategy: (
+    token: string,
+    portfolioId: string,
+    payload: {
+      name: string;
+      description?: string | null;
+      strategy_type?: StrategyType;
+      parameters?: Record<string, unknown>;
+      status?: StrategyStatus;
+    }
+  ) =>
+    request<Strategy>(
+      `/portfolios/${portfolioId}/strategies`,
+      { method: "POST", body: JSON.stringify(payload) },
+      token
+    ),
+  updateStrategy: (
+    token: string,
+    portfolioId: string,
+    strategyId: string,
+    payload: {
+      name?: string;
+      description?: string | null;
+      strategy_type?: StrategyType;
+      parameters?: Record<string, unknown>;
+      status?: StrategyStatus;
+    }
+  ) =>
+    request<Strategy>(
+      `/portfolios/${portfolioId}/strategies/${strategyId}`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      token
+    ),
+  deleteStrategy: (
+    token: string,
+    portfolioId: string,
+    strategyId: string
+  ) =>
+    request<void>(
+      `/portfolios/${portfolioId}/strategies/${strategyId}`,
+      { method: "DELETE" },
+      token
+    ),
   getQuotes: (token: string, symbols: string[], exchange: string) =>
     request<Quote[]>(
       `/market/quotes?symbols=${encodeURIComponent(symbols.join(","))}&exchange=${exchange}`,

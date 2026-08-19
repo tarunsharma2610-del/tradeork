@@ -48,16 +48,16 @@ order APIs.
 ```
 .
 ├── backend/
-│   ├── alembic/                 # migrations 0001..0004
+│   ├── alembic/                 # migrations 0001..0005
 │   ├── app/
-│   │   ├── api/v1/endpoints/    # auth, users, portfolios, trading, instruments, market, health
+│   │   ├── api/v1/endpoints/    # auth, users, portfolios, trading, strategies, instruments, market, settings, health
 │   │   ├── core/                # config, database, redis, security
-│   │   ├── domain/              # enums (OrderSide/Type/Status, ExecutionMode, etc.)
-│   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade
+│   │   ├── domain/              # enums (OrderSide/Type/Status, ExecutionMode, StrategyType/Status, etc.)
+│   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade, Strategy
 │   │   ├── schemas/             # request/response Pydantic models
-│   │   ├── services/            # auth, users, portfolios, paper_engine, live_execution, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
+│   │   ├── services/            # auth, users, portfolios, strategies, paper_engine, live_execution, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
 │   │   └── repositories/        # data-access layer per entity
-│   └── tests/                   # pytest + ruff (106 tests, all green)
+│   └── tests/                   # pytest + ruff (119 tests, all green)
 ├── frontend/
 │   └── src/
 │       ├── app/                 # /, /login, /register, /dashboard
@@ -73,16 +73,18 @@ order APIs.
 **Phase: 4 — Live execution adapter. Item 1 (BrokerAdapter interface +
 Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
 adapter) are DONE. Settings UI with the paper/live portfolio switch is DONE.
-Paper engine remains untouched as the source of truth.**
+Per-portfolio Strategies CRUD (backend + dashboard panel) is DONE. Paper engine
+remains untouched as the source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
 
-**Current session note (2026-08-19):** Built the **Settings page + header link**
-(exposing the per-portfolio paper/live switch) — the first item in the
-user-feedback priority list. Added `GET /api/v1/settings/execution` (auth) so
-the UI can render broker/market-data/live-availability without exposing
-credentials. Backend tests now **109 passing**; frontend typecheck/lint/build
-green. See "Session 2026-08-19" under "What has been done".
+**Current session note (2026-08-19):** Added the full-stack **Strategies**
+feature (user-feedback item 1): `strategies` table (migration `0005`), model +
+repository + service + schemas, CRUD API under `/portfolios/{id}/strategies`
+(tenant-scoped, duplicate-name 409), and a dashboard **Strategies** panel
+(add/edit/deactivate/delete per portfolio). Backend tests now **119 passing**;
+frontend typecheck/lint/build green. See "Session 2026-08-19 (Strategies)"
+under "What has been done".
 
 ## How to continue WITHOUT burning your token budget
 
@@ -106,7 +108,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 | Change auth/session | `backend/app/services/auth.py` → `backend/app/api/v1/endpoints/auth.py` → `backend/app/core/security.py` → `frontend/src/lib/auth.tsx` |
 | Change market data | `backend/app/services/market_data.py` → `provider_factory.py` → `quote_stream.py` → `upstox.py` → `backend/app/api/v1/endpoints/market.py` |
 | DB schema change | `backend/app/models/<entity>.py` → `backend/alembic/versions/` (next revision) → `backend/app/repositories/<entity>.py` → add a test |
-| **Build Strategies feature** | This HANDOVER "Next step" → `backend/app/models/` (strategy pattern from `order.py`) → `backend/alembic/versions/` next revision → `backend/app/repositories/` → `backend/app/services/` → `backend/app/schemas/` → `backend/app/api/v1/endpoints/` + `router.py` → `backend/tests/` → `frontend/src/lib/api.ts` → `frontend/src/components/` → `frontend/src/app/dashboard/page.tsx` |
+| **Build Strategies feature** | DONE (2026-08-19): model `backend/app/models/strategy.py`, migration `0005`, repo `repositories/strategies.py`, service `services/strategies.py`, schemas `schemas/strategy.py`, API `api/v1/endpoints/strategies.py` (`/portfolios/{id}/strategies` CRUD), UI `frontend/src/components/strategies-panel.tsx` wired into the dashboard. Strategy engine/signals still NOT built. |
 | **Build Settings page (live/paper toggle + broker config)** | DONE (2026-08-19): page at `frontend/src/app/settings/page.tsx`, link in `dashboard-header.tsx`, endpoint `backend/app/api/v1/endpoints/settings.py` (`GET /settings/execution`). Broker token store (per-user) still NOT built — that is the next step below. |
 
 ### File map (one line each)
