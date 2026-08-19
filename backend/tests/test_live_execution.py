@@ -306,7 +306,9 @@ class TestLiveExecutionApi:
         import app.api.v1.endpoints.trading as trading_module
 
         broker = FakeLiveBroker()
-        monkeypatch.setattr(trading_module, "get_broker", lambda: broker)
+        monkeypatch.setattr(
+            trading_module, "get_broker_for_user", lambda db, user_id: broker
+        )
         headers = auth_headers(register_user(client, "liveapi4@example.com"))
         portfolio = client.post(
             PORTFOLIOS_URL,

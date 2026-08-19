@@ -37,8 +37,23 @@ export interface ExecutionSettings {
   live_execution_enabled: boolean;
   broker_adapter: string;
   broker_is_mock: boolean;
+  broker_connected: boolean;
   market_data_provider: string;
   market_data_is_mock: boolean;
+}
+
+export type BrokerProvider = "upstox";
+
+export interface BrokerConnection {
+  id: string;
+  user_id: string;
+  provider: BrokerProvider;
+  label: string | null;
+  access_token_masked: string;
+  api_key_masked: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Portfolio {
@@ -199,6 +214,38 @@ export const api = {
   health: () => request<HealthStatus>("/health"),
   executionSettings: (token: string) =>
     request<ExecutionSettings>("/settings/execution", {}, token),
+  listBrokerConnections: (token: string) =>
+    request<BrokerConnection[]>("/settings/broker", {}, token),
+  createBrokerConnection: (
+    token: string,
+    payload: {
+      provider?: BrokerProvider;
+      label?: string | null;
+      access_token: string;
+      api_key?: string | null;
+    }
+  ) =>
+    request<BrokerConnection>("/settings/broker", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    }, token),
+  updateBrokerConnection: (
+    token: string,
+    id: string,
+    payload: {
+      label?: string | null;
+      access_token?: string | null;
+      api_key?: string | null;
+      is_active?: boolean;
+    }
+  ) =>
+    request<BrokerConnection>(
+      `/settings/broker/${id}`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      token
+    ),
+  deleteBrokerConnection: (token: string, id: string) =>
+    request<void>(`/settings/broker/${id}`, { method: "DELETE" }, token),
   register: (payload: RegisterPayload) =>
     request<AuthTokens>("/auth/register", {
       method: "POST",

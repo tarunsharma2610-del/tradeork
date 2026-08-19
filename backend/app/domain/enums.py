@@ -43,6 +43,12 @@ class ExecutionMode(StrEnum):
     LIVE = "live"
 
 
+class BrokerProvider(StrEnum):
+    """Broker providers supported for per-user broker connections."""
+
+    UPSTOX = "upstox"
+
+
 class OrderSide(StrEnum):
     BUY = "BUY"
     SELL = "SELL"

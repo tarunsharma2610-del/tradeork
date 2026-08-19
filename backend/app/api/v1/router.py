@@ -2,6 +2,7 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     auth,
+    broker_connections,
     health,
     instruments,
     market,
@@ -22,3 +23,4 @@ api_router.include_router(strategies.router)
 api_router.include_router(instruments.router)
 api_router.include_router(market.router)
 api_router.include_router(settings.router)
+api_router.include_router(broker_connections.router)

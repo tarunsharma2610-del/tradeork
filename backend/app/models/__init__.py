@@ -1,4 +1,5 @@
 from app.models.audit_log import AuditLog
+from app.models.broker_connection import BrokerConnection
 from app.models.instrument import Instrument
 from app.models.order import Order
 from app.models.portfolio import Portfolio
@@ -10,6 +11,7 @@ from app.models.user import User
 
 __all__ = [
     "AuditLog",
+    "BrokerConnection",
     "Instrument",
     "Order",
     "Portfolio",

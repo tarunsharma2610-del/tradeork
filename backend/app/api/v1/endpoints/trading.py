@@ -10,7 +10,7 @@ from app.models.portfolio import Portfolio
 from app.models.user import User
 from app.schemas.order import OrderCreate, OrderRead
 from app.schemas.position import PortfolioSummary, PositionRead
-from app.services.broker_factory import get_broker
+from app.services.broker_factory import get_broker_for_user
 from app.services.live_execution import LiveExecutionService
 from app.services.paper_engine import PaperOrderEngine
 
@@ -30,16 +30,22 @@ def _portfolio(db: Session, portfolio_id: UUID, user_id: UUID) -> Portfolio:
 def _execution_for(
     db: Session, portfolio_id: UUID, user_id: UUID
 ) -> PaperOrderEngine | LiveExecutionService:
-    """Return the execution service matching the portfolio's execution mode."""
+    """Return the execution service matching the portfolio's execution mode.
+
+    Live portfolios resolve their broker adapter from the current user's
+    stored broker connection (Settings → broker connections), falling back to
+    the server-configured ``BROKER_ADAPTER``.
+    """
     portfolio = _portfolio(db, portfolio_id, user_id)
     if portfolio.execution_mode == ExecutionMode.LIVE.value:
-        broker = get_broker()
+        broker = get_broker_for_user(db, user_id)
         if broker.is_mock:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=(
-                    "Live execution is not configured: no live broker adapter "
-                    "available (set BROKER_ADAPTER=upstox + credentials)."
+                    "Live execution is not configured: add your Upstox API "
+                    "in Settings, or set BROKER_ADAPTER=upstox + credentials "
+                    "on the server."
                 ),
             )
         return LiveExecutionService(db, broker)
