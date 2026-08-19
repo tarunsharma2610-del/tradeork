@@ -27,6 +27,59 @@ Follow this on **every** task, not just at phase boundaries:
 > Commit often (per change, not per phase) — a phase spans many sessions, and
 > the handover must reflect reality at every point, not just at "phase done".
 
+## TOKEN BUDGET — READ THIS FIRST (2026-08-19)
+
+**Context:** the previous four MonkeyCode accounts consumed ~120M tokens
+combined to reach the current state. Roughly **99% of that was overhead**
+(re-reading the repo, tool-output noise, debug loops, re-verifying green
+code) — not project value. The whole repo is ~7,400 lines; the remaining
+work genuinely needs only **~2–4M tokens** if spent efficiently.
+
+**Tomorrow's session budget: 10M tokens total.** Treat that as ~2–3M of real
+work capacity — anything beyond that is waste. Do NOT spend the budget to
+"explore"; spend it to land a committed feature.
+
+### Hard rules (mandatory for the next session)
+
+1. **Read exactly three things first:** README → this HANDOVER → skim
+   MASTER_ROADMAP, then read ONLY the task-relevant files named by the
+   "Reading plans" table. Never open `seed.py`, `paper_engine.py`,
+   `trading-panel.tsx` or any file unless your task touches it.
+2. **Grep first, read second.** Use targeted searches and `Read` with
+   `offset`/`limit`. Never dump a 2,000-line file wholesale; read the
+   30–80 lines that matter.
+3. **Run pytest/build ONCE per commit — not after every edit.** Batch
+   independent checks in parallel. Use `-q`/`--quiet` and tail small
+   outputs; a CI-style check cycle costs 10–50k tokens, and re-running it
+   5x per feature is the fastest way to blow the budget.
+4. **Do not re-verify already-green phases.** Backend = 132 passing, ruff
+   clean; frontend = typecheck/lint/build green (verified 2026-08-19). Only
+   re-run checks for what YOU changed.
+5. **One task per session.** The next task is fixed: **autotrade flag
+   (user-feedback item 6, full stack)**. Complete it end-to-end: code →
+   tests → update this HANDOVER + README if user-facing → commit → push. Do
+   not "also tidy up" unrelated things.
+6. **Commit + push the moment a unit is done.** Never leave work only local.
+   If the budget starts running low mid-task: finish the current safe unit,
+   update this file, commit, push, and STOP. Never start a second task when
+   budget is uncertain.
+7. **No unrelated refactoring.** Do not rewrite working architecture, do not
+   re-verify green features, do not "improve" code you were not asked to
+   touch.
+8. **If a task needs more than ~1–2 debug iterations, stop and rethink the
+   approach** instead of burning tokens on trial-and-error.
+9. **Prefer subagents for exploration** (they carry their own context) and
+   prefer small, targeted reads over broad ones.
+
+### What "fullest capacity" looks like
+
+A 10M-token session should land **item 6 (autotrade, full stack)** — and at
+most one additional small task — with the repo still green and everything
+committed + pushed. If you finish item 6 comfortably, pick the next item in
+"Next step" (or the top Phase 4 open item) and repeat the same discipline.
+If you do NOT finish item 6, document exactly what remains here, commit, and
+push anyway.
+
 ## What this project is
 
 Tradeork is a **multi-user SaaS paper-trading platform for Indian markets**
@@ -179,7 +232,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 
 ### Suggested first steps for a new agent
 
-1. Read this HANDOVER.md (you're here).
+1. Read this HANDOVER.md (you're here) — **including the "TOKEN BUDGET" section above; your session has a 10M-token cap, spend it as if it were 2–3M.**
 2. Run the verification commands below to confirm green baseline (cheap, no reading).
 3. Read only the files in the row that matches your task.
 4. Never read `seed.py` unless touching the instrument catalog.
@@ -479,7 +532,8 @@ Notes:
 >    `HealthStatus` removed from the frontend client (backend `/health`
 >    endpoint unchanged, still used by CI/ops). See "Session 2026-08-19
 >    (dashboard diagnostic cleanup)".
-> 6. **Autotrade option in trading Settings.** **NEXT.** The user wants an
+> 6. **Autotrade option in trading Settings.** **NEXT (budgeted: tomorrow's
+>    session, 10M tokens — see "TOKEN BUDGET" section above).** The user wants an
 >    **"autotrade"**
 >    toggle/feature alongside the paper/live switch in Settings. Define scope:
 >    at minimum a per-portfolio `autotrade_enabled` flag surfaced in Settings +
