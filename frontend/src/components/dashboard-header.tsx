@@ -1,6 +1,7 @@
 "use client";
 
-import { LogOut } from "lucide-react";
+import { LogOut, Settings } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 import { Brand } from "@/components/brand";
@@ -29,6 +30,12 @@ export function DashboardHeader() {
             <p className="text-xs text-muted-foreground">{user?.email}</p>
           </div>
           <ThemeToggle />
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/settings">
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Settings</span>
+            </Link>
+          </Button>
           <Button variant="outline" size="sm" onClick={onLogout}>
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">Sign out</span>

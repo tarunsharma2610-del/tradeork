@@ -72,14 +72,17 @@ order APIs.
 
 **Phase: 4 — Live execution adapter. Item 1 (BrokerAdapter interface +
 Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
-adapter) are DONE. Paper engine remains untouched as the source of truth.**
+adapter) are DONE. Settings UI with the paper/live portfolio switch is DONE.
+Paper engine remains untouched as the source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
 
-**Current session note (2026-08-17):** No code changed this session — the
-preview was deployed and the USER gave detailed UI feedback that defines the
-NEXT feature work. See "Most recent session" and "Next step" below. The
-working tree is clean; commits `83ee2ac` and `a2ca5b1` are pushed to `main`.
+**Current session note (2026-08-19):** Built the **Settings page + header link**
+(exposing the per-portfolio paper/live switch) — the first item in the
+user-feedback priority list. Added `GET /api/v1/settings/execution` (auth) so
+the UI can render broker/market-data/live-availability without exposing
+credentials. Backend tests now **109 passing**; frontend typecheck/lint/build
+green. See "Session 2026-08-19" under "What has been done".
 
 ## How to continue WITHOUT burning your token budget
 
@@ -104,7 +107,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 | Change market data | `backend/app/services/market_data.py` → `provider_factory.py` → `quote_stream.py` → `upstox.py` → `backend/app/api/v1/endpoints/market.py` |
 | DB schema change | `backend/app/models/<entity>.py` → `backend/alembic/versions/` (next revision) → `backend/app/repositories/<entity>.py` → add a test |
 | **Build Strategies feature** | This HANDOVER "Next step" → `backend/app/models/` (strategy pattern from `order.py`) → `backend/alembic/versions/` next revision → `backend/app/repositories/` → `backend/app/services/` → `backend/app/schemas/` → `backend/app/api/v1/endpoints/` + `router.py` → `backend/tests/` → `frontend/src/lib/api.ts` → `frontend/src/components/` → `frontend/src/app/dashboard/page.tsx` |
-| **Build Settings page (live/paper toggle + broker config)** | `backend/app/services/portfolios.py` (update already accepts `execution_mode`) → `backend/app/api/v1/endpoints/portfolios.py` (PATCH exists) → `backend/app/services/broker.py`/`upstox_broker.py`/`broker_factory.py` (per-user token store if requested) → `frontend/src/app/settings/page.tsx` (new) → `frontend/src/components/dashboard-header.tsx` (add Settings link) → `frontend/src/lib/api.ts` |
+| **Build Settings page (live/paper toggle + broker config)** | DONE (2026-08-19): page at `frontend/src/app/settings/page.tsx`, link in `dashboard-header.tsx`, endpoint `backend/app/api/v1/endpoints/settings.py` (`GET /settings/execution`). Broker token store (per-user) still NOT built — that is the next step below. |
 
 ### File map (one line each)
 
@@ -123,7 +126,7 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 
 **Backend API** (`backend/app/api/v1/endpoints/`)
 - `trading.py` (115) — Phase 3+4 endpoints (orders/positions/summary; dispatch by portfolio execution mode).
-- `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34).
+- `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34), `settings.py` (17) — `GET /settings/execution` (auth) exposing non-secret execution config for the Settings UI.
 - `router.py` (20) — registers all routers.
 
 **Backend core** (`backend/app/core/`)
@@ -139,8 +142,9 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 **Frontend** (`frontend/src/`)
 - `lib/api.ts` (253) — typed API client; every backend call goes through here.
 - `lib/auth.tsx` (97), `lib/use-market-stream.ts` (203).
+- `app/settings/page.tsx` (~250) — Settings page: per-portfolio paper/live switch (confirm on paper→live) + read-only Execution config card.
 - `components/trading-panel.tsx` (517) — trade ticket + positions/orders UI.
-- `components/market-quotes-card.tsx` (300), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78).
+- `components/market-quotes-card.tsx` (300), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78), `dashboard-header.tsx` (54, now has Settings link).
 - `app/dashboard/page.tsx` (157) — wires everything; `app/page.tsx` (240) = landing.
 
 ### Suggested first steps for a new agent
@@ -255,13 +259,30 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
   (`execution_mode` on `PATCH /portfolios/{id}`); strategies and a Settings
   page do not exist yet.
 
+### Session 2026-08-19 — Settings page + header link (user-feedback item 2)
+- New `GET /api/v1/settings/execution` (authenticated) returning non-secret
+  execution config: `live_execution_enabled`, `broker_adapter` +
+  `broker_is_mock`, `market_data_provider` + `market_data_is_mock`. Registered
+  in `router.py`; no credentials are ever returned.
+- New `frontend/src/app/settings/page.tsx`: auth-guarded Settings page with (a)
+  an "Execution" card showing broker adapter / market data / live-portfolio
+  availability and (b) a "Portfolio mode" list with a Paper/Live switch per
+  portfolio. Switching **to live requires an inline confirmation**; switching
+  back to paper is immediate (safe direction). The Live button is disabled
+  with a hint when `LIVE_EXECUTION_ENABLED=false`.
+- `dashboard-header.tsx` now has a Settings link (gear + label) next to Sign out.
+- `api.ts` added `executionSettings()` and `updatePortfolio()` (PATCH).
+- Backend tests: 3 new in `tests/test_settings.py` (auth required, defaults,
+  config reflection via monkeypatch) — **109 total passing**; ruff clean;
+  frontend typecheck/lint/build green (new `/settings` route generated).
+
 ## Verification commands
 
 ```bash
 # Backend (from backend/)
 cd backend
 ruff check app tests
-python3 -m pytest -q          # expect 106 passed
+python3 -m pytest -q          # expect 109 passed
 # migration up/down/up on SQLite:
 DATABASE_URL=sqlite:////tmp/t.db alembic upgrade head && \
 DATABASE_URL=sqlite:////tmp/t.db alembic downgrade base && \
@@ -313,10 +334,10 @@ Notes:
 
 ## Next step
 
-> **PRIORITY CHANGE from user feedback (2026-08-17, preview session).**
+> **PRIORITY LIST from user feedback (2026-08-17, preview session).**
 > The user previewed the app and reported it feels like "just a simple page —
 > create portfolio + refresh mock data". They explicitly asked for the
-> following, in their own words:
+> following, in their own words. **Item 2 is now DONE (2026-08-19).**
 >
 > 1. **A strategies bar where I can manually add or edit strategies for each
 >    portfolio.** → Build a per-portfolio `strategies` feature (new DB model +
@@ -324,14 +345,14 @@ Notes:
 >    panel on the dashboard to add/edit/delete strategies). This does NOT exist
 >    yet anywhere in the codebase.
 > 2. **In Settings: option to switch between live mode and paper trading mode.**
->    → Backend ALREADY supports this: `PATCH /portfolios/{id}` accepts
->    `execution_mode` (`paper`/`live`), gated by `LIVE_EXECUTION_ENABLED`
->    (default false). Missing piece is the **Settings UI** (new
->    `frontend/src/app/settings/page.tsx`) + a **Settings link in the dashboard
->    header**, exposing the per-portfolio mode switch.
-> 3. **In Settings: option to add API / the broker.** → Decide scope: per-user
->    broker access-token storage (new model + masked-at-rest, selected per
->    user in `broker_factory`/`_execution_for`) vs. read-only status of the
+>    → ✅ DONE (2026-08-19): Settings page at `/settings` with a per-portfolio
+>    Paper/Live switch (confirm on paper→live), wired to the existing
+>    `PATCH /portfolios/{id}` `execution_mode`; Settings link in the dashboard
+>    header; `GET /settings/execution` exposes live availability. Live is
+>    gated server-side by `LIVE_EXECUTION_ENABLED`.
+> 3. **In Settings: option to add API / the broker.** → **NEXT.** Decide scope:
+>    per-user broker access-token storage (new model + masked-at-rest, selected
+>    per user in `broker_factory`/`_execution_for`) vs. read-only status of the
 >    server-configured `BROKER_ADAPTER`. Recommend the per-user token store so
 >    "add your Upstox API" is real. Note `get_broker()` currently resolves a
 >    SINGLE global adapter from env — a per-user token means threading the
@@ -360,10 +381,9 @@ Notes:
 >    for auto-placement; a manual/automated switch is needed — the user must be
 >    able to turn autotrade on/off per portfolio.
 >
-> Suggested execution order: Settings page + header link first (cheap, backend
-> already done), then Strategies feature (full stack), then broker token store
-> + autotrade flag, then dashboard diagnostic cleanup. Update this file +
-> README in the same commit as always.
+> Suggested execution order: ~~Settings page + header link~~ (DONE) → Strategies
+> feature (full stack) → broker token store + autotrade flag → dashboard
+> diagnostic cleanup. Update this file + README in the same commit as always.
 
 **Phase 4 remaining open items** (from the original roadmap, still valid but
 lower priority than the user's new requests above), in suggested order:

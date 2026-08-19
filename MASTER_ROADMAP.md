@@ -439,9 +439,10 @@ Events:
 - [ ] CSV/PDF export where appropriate
 
 ### SaaS/account
+- [x] Trading settings (per-portfolio paper/live switch) — Settings page at `/settings` (2026-08-19); live gated by `LIVE_EXECUTION_ENABLED`
+- [x] Read-only execution config (broker adapter / market-data provider / live availability via `GET /settings/execution`)
 - [ ] Account settings
-- [ ] Broker settings
-- [ ] Trading settings
+- [ ] Broker settings (connect/disconnect + per-user token store — Settings page exists, connection UI pending)
 - [ ] Risk settings
 - [ ] Notification settings
 - [ ] Session/device management

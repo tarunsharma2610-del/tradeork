@@ -6,6 +6,7 @@ from app.api.v1.endpoints import (
     instruments,
     market,
     portfolios,
+    settings,
     trading,
     users,
 )
@@ -18,3 +19,4 @@ api_router.include_router(portfolios.router)
 api_router.include_router(trading.router)
 api_router.include_router(instruments.router)
 api_router.include_router(market.router)
+api_router.include_router(settings.router)

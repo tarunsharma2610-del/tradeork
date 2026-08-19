@@ -33,6 +33,14 @@ export interface HealthStatus {
   environment: string;
 }
 
+export interface ExecutionSettings {
+  live_execution_enabled: boolean;
+  broker_adapter: string;
+  broker_is_mock: boolean;
+  market_data_provider: string;
+  market_data_is_mock: boolean;
+}
+
 export interface Portfolio {
   id: string;
   user_id: string;
@@ -166,6 +174,8 @@ async function request<T>(
 
 export const api = {
   health: () => request<HealthStatus>("/health"),
+  executionSettings: (token: string) =>
+    request<ExecutionSettings>("/settings/execution", {}, token),
   register: (payload: RegisterPayload) =>
     request<AuthTokens>("/auth/register", {
       method: "POST",
@@ -201,6 +211,25 @@ export const api = {
     }, token),
   deletePortfolio: (token: string, id: string) =>
     request<void>(`/portfolios/${id}`, { method: "DELETE" }, token),
+  updatePortfolio: (
+    token: string,
+    id: string,
+    payload: {
+      name?: string;
+      description?: string | null;
+      initial_capital?: string;
+      status?: string;
+      execution_mode?: string;
+    }
+  ) =>
+    request<Portfolio>(
+      `/portfolios/${id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify(payload),
+      },
+      token
+    ),
   createOrder: (
     token: string,
     portfolioId: string,

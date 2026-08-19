@@ -5,7 +5,8 @@ Architected so the trading engine can later support real broker execution
 (Upstox first, then Zerodha/Groww) with strict PAPER/LIVE separation.
 
 **Status: Phase 4 — Live execution adapter + portfolio LIVE mode. Paper engine
-remains the source of truth.**
+remains the source of truth. A Settings page exposes the per-portfolio
+paper/live switch.**
 
 ## What is implemented
 
@@ -65,6 +66,11 @@ remains the source of truth.**
     MARKET/LIMIT, quantity, limit price), positions table with unrealized P&L,
     order list with cancel, and a live summary (cash, equity, realized/
     unrealized P&L)
+  - Settings page (`/settings`): per-portfolio **Paper/Live** trading-mode
+    switch (confirmation required when switching to live; live gated
+    server-side by `LIVE_EXECUTION_ENABLED`) plus a read-only Execution card
+    showing the configured broker adapter, market-data provider and live
+    availability; linked from the dashboard header
   - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)
   - Light + dark themes, responsive layout
 - **Deployment**
@@ -213,8 +219,12 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   requests), so CSRF protection applies once cookie-based flows are introduced.
 - No broker credentials are stored or handled anywhere yet; Upstox credentials
   are provided via environment configuration only.
-- Portfolio ownership is enforced server-side (never trusted from the request
-  body); a user cannot read or mutate another tenant's portfolios.
+  - Portfolio ownership is enforced server-side (never trusted from the request
+    body); a user cannot read or mutate another tenant's portfolios.
+  - Settings: `GET /settings/execution` (authenticated) exposes non-secret
+    execution config (broker adapter, market-data provider, whether live
+    portfolios are enabled) for the Settings UI — credentials are never
+    returned.
 - All market data is labelled with `is_mock`/`source`; the provider abstraction
   ensures real feeds cannot be mistaken for mock data. The default provider is
   mock; live Upstox data activates only when explicitly configured.
@@ -247,6 +257,8 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   requested a per-portfolio **strategies bar** (manually add/edit strategies)
   and an **autotrade** toggle in Settings so strategies can auto-place orders
   through the chosen execution mode (paper/live); see `HANDOVER.md` "Next step".
+  The Settings page and paper/live switch are implemented; the strategies bar,
+  autotrade flag and per-user broker token store are not.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).
 
@@ -344,3 +356,18 @@ sudo docker compose exec backend python -m app.seed
    are flat.
 8. Confirm `/docs` lists the trading endpoints
    (`/portfolios/{id}/orders`, `/positions`, `/summary`).
+
+## Manual testing checklist (Settings)
+
+1. Log in → the dashboard header shows a **Settings** link → click it.
+2. The Settings page loads your portfolios, each with a **Paper/Live** switch.
+3. Click **Live** on a portfolio → an inline confirmation appears ("Switch to
+   live mode — real orders may be placed?") → cancel leaves it on paper.
+4. If `LIVE_EXECUTION_ENABLED` is false (default), the Live button is disabled
+   and the page explains live mode is disabled on this server.
+5. With `LIVE_EXECUTION_ENABLED=true`, confirm the switch → the portfolio badge
+   flips to `live`; the dashboard's trading panel now routes its orders through
+   the broker adapter for that portfolio.
+6. The Execution card shows the configured broker adapter (Mock/Upstox), market
+   data provider, and live availability. No secrets/credentials are displayed.
+7. Unauthenticated `GET /api/v1/settings/execution` → 401.
