@@ -1,6 +1,6 @@
 "use client";
 
-import { Wallet, BarChart3, Database, Activity } from "lucide-react";
+import { Wallet, BarChart3 } from "lucide-react";
 
 import {
   Card,
@@ -75,4 +75,4 @@ export function StatGrid({
   );
 }
 
-export const statIcons = { Wallet, BarChart3, Database, Activity };
+export const statIcons = { Wallet, BarChart3 };

@@ -26,13 +26,6 @@ export interface User {
   created_at: string;
 }
 
-export interface HealthStatus {
-  status: string;
-  database: string;
-  redis: string;
-  environment: string;
-}
-
 export interface ExecutionSettings {
   live_execution_enabled: boolean;
   broker_adapter: string;
@@ -211,7 +204,6 @@ async function request<T>(
 }
 
 export const api = {
-  health: () => request<HealthStatus>("/health"),
   executionSettings: (token: string) =>
     request<ExecutionSettings>("/settings/execution", {}, token),
   listBrokerConnections: (token: string) =>

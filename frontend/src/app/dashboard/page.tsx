@@ -32,12 +32,6 @@ export default function DashboardPage() {
   const { user, tokens, restoring } = useAuth();
   const router = useRouter();
   const [portfolios, setPortfolios] = React.useState<Portfolio[]>([]);
-  const [health, setHealth] = React.useState<string | null>(null);
-  const [feedInfo, setFeedInfo] = React.useState<{
-    mode: string;
-    isMock: boolean | null;
-    source: string | null;
-  } | null>(null);
   const [activeTab, setActiveTab] = React.useState<Tab>("trading");
 
   const token = tokens?.access_token ?? null;
@@ -56,13 +50,6 @@ export default function DashboardPage() {
       .catch(() => setPortfolios([]));
   }, [token]);
 
-  React.useEffect(() => {
-    api
-      .health()
-      .then((h) => setHealth(h.database === "ok" && h.redis === "ok" ? "Healthy" : "Degraded"))
-      .catch(() => setHealth("Unavailable"));
-  }, []);
-
   const totalCapital = portfolios.reduce(
     (sum, p) => sum + Number(p.initial_capital),
     0
@@ -80,29 +67,6 @@ export default function DashboardPage() {
       value: `₹${inr.format(totalCapital)}`,
       hint: "INR, paper money",
       icon: statIcons.BarChart3,
-    },
-    {
-      label: "Data mode",
-      value: feedInfo
-        ? feedInfo.isMock === null
-          ? "…"
-          : feedInfo.isMock
-            ? "Mock"
-            : "Live"
-        : "Mock",
-      hint: feedInfo
-        ? feedInfo.source
-          ? `source: ${feedInfo.source} · mode: ${feedInfo.mode}`
-          : `mode: ${feedInfo.mode}`
-        : "is_mock: true (default)",
-      icon: statIcons.Database,
-      accent: feedInfo?.isMock === false ? "positive" : "default",
-    },
-    {
-      label: "Platform",
-      value: health ?? "…",
-      hint: "Backend health",
-      icon: statIcons.Activity,
     },
   ];
 
@@ -167,7 +131,7 @@ export default function DashboardPage() {
           }`}
         >
           <PortfoliosSection token={token} />
-          <MarketQuotesCard token={token} onFeedInfo={setFeedInfo} />
+          <MarketQuotesCard token={token} />
         </div>
 
         <div className={activeTab === "strategies" ? "" : "hidden"}>

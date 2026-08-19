@@ -60,8 +60,7 @@ paper/live switch.**
   - Dashboard: account card, portfolios section (create/delete with inline
     confirmation, cash balance per portfolio), market quotes card (WebSocket
     streaming with automatic polling fallback, live/mock badge, per-symbol
-    source tag, price sparkline, instrument-catalog search to add symbols),
-    dynamic "Data mode" stat that reflects the actual feed, system status.
+    source tag, price sparkline, instrument-catalog search to add symbols).
     The dashboard is a **tabbed workspace**: **Trading** (default, front and
     center) · **Portfolios & Quotes** · **Strategies** · **Account** — the
     panels stay mounted so the quote stream keeps running when you switch
@@ -355,8 +354,7 @@ sudo docker compose exec backend python -m app.seed
 10. With Docker: `docker compose up --build` then repeat the above via `http://localhost`.
 11. Confirm `/docs` renders the OpenAPI schema for the new endpoints.
 12. With Upstox credentials configured (`MARKET_DATA_PROVIDER=upstox`), the
-    quotes card badge switches to `live · streaming`, rows show `live` tags,
-    and the dashboard "Data mode" stat reports `Live`.
+    quotes card badge switches to `live · streaming` and rows show `live` tags.
 
 ## Manual testing checklist (Phase 3)
 

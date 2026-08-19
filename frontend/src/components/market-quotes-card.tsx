@@ -19,8 +19,6 @@ import { cn } from "@/lib/utils";
 
 interface MarketQuotesCardProps {
   token: string | null;
-  /** Reports the current feed/mode so parent cards can reflect reality. */
-  onFeedInfo?: (info: { mode: string; isMock: boolean | null; source: string | null }) => void;
 }
 
 const inr = new Intl.NumberFormat("en-IN", {
@@ -68,7 +66,7 @@ function streamLabel(mode: string, isMock: boolean | undefined): string {
   return mode === "live" ? `${feed} · streaming` : `${feed} · polling`;
 }
 
-export function MarketQuotesCard({ token, onFeedInfo }: MarketQuotesCardProps) {
+export function MarketQuotesCard({ token }: MarketQuotesCardProps) {
   const [input, setInput] = React.useState("RELIANCE,TCS,NIFTY");
   const [error, setError] = React.useState<string | null>(null);
   const [refreshing, setRefreshing] = React.useState(false);
@@ -108,10 +106,6 @@ export function MarketQuotesCard({ token, onFeedInfo }: MarketQuotesCardProps) {
   }, [quotes]);
 
   const isMock = quotes[0]?.is_mock ?? null;
-
-  React.useEffect(() => {
-    onFeedInfo?.({ mode, isMock, source: quotes[0]?.source ?? null });
-  }, [onFeedInfo, mode, isMock, quotes]);
 
   const handleRefresh = React.useCallback(async () => {
     if (!token || symbols.length === 0) {

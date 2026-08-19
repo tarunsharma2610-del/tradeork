@@ -76,8 +76,10 @@ adapter) are DONE. Settings UI with the paper/live portfolio switch is DONE.
 Per-portfolio Strategies CRUD (backend + dashboard panel) is DONE. Per-user
 broker connections (Settings → "Add Upstox API") are DONE. Dashboard
 discoverability (user-feedback item 4: tabbed dashboard with Trading front and
-center + prominent Register entry on login) is DONE. Paper engine
-remains untouched as the source of truth.**
+center + prominent Register entry on login) is DONE. Dashboard diagnostic
+cleanup (user-feedback item 5: backend-health/Platform and Data-mode stats
+removed from the dashboard) is DONE. Paper engine remains untouched as the
+source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
 
@@ -105,8 +107,9 @@ free account"** button (was a subtle text link) so Register is discoverable.
 
 Backend tests now **132 passing**; frontend typecheck/lint/build green; the
 migration chain `0001 → 0006` up/down/up verifies. See "Session 2026-08-19
-(Strategies)", "Session 2026-08-19 (Broker connections)" and "Session
-2026-08-19 (Dashboard discoverability)" under "What has been done".
+(Strategies)", "Session 2026-08-19 (Broker connections)", "Session
+2026-08-19 (Dashboard discoverability)" and "Session 2026-08-19 (Dashboard
+diagnostic cleanup)" under "What has been done".
 
 ## How to continue WITHOUT burning your token budget
 
@@ -167,12 +170,12 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 **Backend tests** (`backend/tests/`) — read as spec: `test_paper_engine.py` (272), `test_trading_api.py` (188), `test_portfolios.py` (140), `test_market_ws.py` (90), `test_broker_connections.py` (245), others smaller. `conftest.py` (75) = fixtures; `helpers.py` (29) = `register_user`/`auth_headers`.
 
 **Frontend** (`frontend/src/`)
-- `lib/api.ts` (405) — typed API client; every backend call goes through here (incl. broker-connection CRUD).
+- `lib/api.ts` (397) — typed API client; every backend call goes through here (incl. broker-connection CRUD).
 - `lib/auth.tsx` (97), `lib/use-market-stream.ts` (203).
 - `app/settings/page.tsx` (~566) — Settings page: per-portfolio paper/live switch (confirm on paper→live) + read-only Execution config card + Broker connection card (add/update token/disconnect, masked previews).
 - `components/trading-panel.tsx` (517) — trade ticket + positions/orders UI.
-- `components/market-quotes-card.tsx` (300), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78), `dashboard-header.tsx` (54, now has Settings link).
-- `app/dashboard/page.tsx` (157) — wires everything; `app/page.tsx` (240) = landing.
+- `components/market-quotes-card.tsx` (294), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78), `dashboard-header.tsx` (54, now has Settings link).
+- `app/dashboard/page.tsx` (173) — wires everything; stats grid shows only Portfolios + Total capital (no dev diagnostics); `app/page.tsx` (240) = landing.
 
 ### Suggested first steps for a new agent
 
@@ -351,12 +354,32 @@ order-placing/fills be discoverable and Register be visible.
   center) · **Portfolios & Quotes** · **Strategies** · **Account**. Icons from
   `lucide-react`; active tab gets a pill highlight; `aria-current` set.
 - Panels are kept **mounted** and hidden with the CSS `hidden` class rather
-  than unmounted, so the market WebSocket feed keeps streaming and the "Data
-  mode" stat keeps updating whichever tab is active.
+  than unmounted, so the market WebSocket feed keeps streaming whichever tab is
+  active.
 - Login page (`frontend/src/app/(auth)/login/page.tsx`): replaced the subtle
   "No account? Create one" text link with a divider + full-width
   **"Create a free account"** outline button linking to `/register`.
 - Frontend typecheck/lint/build green (no backend change).
+
+### Session 2026-08-19 — dashboard diagnostic cleanup (user-feedback item 5)
+Dev-facing backend-health diagnostics removed from the user dashboard so end
+users only see trading info.
+
+- `dashboard/page.tsx`: dropped the **Platform** stat (which rendered
+  `GET /api/v1/health` DB/Redis status — misleading `Degraded` when Redis is
+  absent in the sandbox) and the **Data mode** stat (redundant with the quotes
+  card's live/mock badge + per-row tags). Removed the `health` state, the
+  `api.health()` effect and the `feedInfo`/`onFeedInfo` plumbing. Stats now
+  show only **Portfolios** and **Total capital**.
+- `market-quotes-card.tsx`: removed the `onFeedInfo` prop and its effect
+  (the card still shows its own `mock · streaming`/`live · streaming` badge,
+  per-row `mock`/`live` tags and the `Source: …` line).
+- `stat-cards.tsx`: trimmed unused `Database`/`Activity` icons from `statIcons`.
+- `lib/api.ts`: removed now-unused `health()` client method + `HealthStatus`
+  type (the backend `/api/v1/health` endpoint is unchanged — still used by
+  CI/ops).
+- Backend untouched (132 tests still green, verified); frontend
+  typecheck/lint/build green.
 
 ## Verification commands
 
@@ -419,7 +442,7 @@ Notes:
 > **PRIORITY LIST from user feedback (2026-08-17, preview session).**
 > The user previewed the app and reported it feels like "just a simple page —
 > create portfolio + refresh mock data". They explicitly asked for the
-> following, in their own words. **Items 2 and 3 are now DONE (2026-08-19).**
+> following, in their own words. **Items 2–5 are now DONE (2026-08-19).**
 >
 > 1. **A strategies bar where I can manually add or edit strategies for each
 >    portfolio.** → ✅ DONE (2026-08-19): per-portfolio `strategies` model
@@ -446,17 +469,18 @@ Notes:
 >    front-and-center tab (Portfolios & Quotes / Strategies / Account follow);
 >    the login page gained a prominent **"Create a free account"** button so
 >    Register is visible.
-> 5. **Remove/hide backend-health diagnostics from the user dashboard.** **NEXT.**
->    The
->    "Platform" stat (shows `Degraded` because Redis is absent in the sandbox)
->    and arguably the "Data mode" stat are dev-facing noise, not user features:
->    `dashboard/page.tsx` calls `GET /api/v1/health` and renders DB/Redis status
->    (dashboard is tabbed now but the Platform/Data-mode stats are still shown),
->    and "Data mode" renders `feedInfo` from the
->    quotes card. Recommended: drop the Platform stat entirely, or gate it (and
->    Data mode) behind `ENVIRONMENT=development` so end users only see trading
->    info. `LIVE`/`Mock` labels on the quotes card itself are fine to keep.
-> 6. **Autotrade option in trading Settings.** The user wants an **"autotrade"**
+> 5. **Remove/hide backend-health diagnostics from the user dashboard.**
+>    → ✅ DONE (2026-08-19): the **Platform** stat (rendered
+>    `GET /api/v1/health` DB/Redis status) and the **Data mode** stat
+>    (redundant with the quotes card's live/mock labels) were removed from the
+>    dashboard; the dashboard now shows only **Portfolios** and **Total
+>    capital**. The quotes card keeps its `mock · streaming`/`live · streaming`
+>    badge, per-row `mock`/`live` tags and `Source: …` line. `api.health()` +
+>    `HealthStatus` removed from the frontend client (backend `/health`
+>    endpoint unchanged, still used by CI/ops). See "Session 2026-08-19
+>    (dashboard diagnostic cleanup)".
+> 6. **Autotrade option in trading Settings.** **NEXT.** The user wants an
+>    **"autotrade"**
 >    toggle/feature alongside the paper/live switch in Settings. Define scope:
 >    at minimum a per-portfolio `autotrade_enabled` flag surfaced in Settings +
 >    the dashboard, ideally wired to the strategies feature (item 1) so
@@ -467,9 +491,9 @@ Notes:
 >
 > Suggested execution order: ~~Settings page + header link~~ (DONE) →
 > ~~Strategies feature (full stack)~~ (DONE) → ~~broker token store~~ (DONE) →
-> ~~dashboard discoverability/register entry point~~ (DONE) → dashboard
-> diagnostic cleanup (item 5) → autotrade flag (item 6). Update this file +
-> README in the same commit as always.
+> ~~dashboard discoverability/register entry point~~ (DONE) → ~~dashboard
+> diagnostic cleanup (item 5)~~ (DONE) → **autotrade flag (item 6) — NEXT**.
+> Update this file + README in the same commit as always.
 
 **Phase 4 remaining open items** (from the original roadmap, still valid but
 lower priority than the user's new requests above), in suggested order:
