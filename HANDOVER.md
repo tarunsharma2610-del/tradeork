@@ -48,12 +48,12 @@ order APIs.
 ```
 .
 ├── backend/
-│   ├── alembic/                 # migrations 0001..0005
+│   ├── alembic/                 # migrations 0001..0006
 │   ├── app/
-│   │   ├── api/v1/endpoints/    # auth, users, portfolios, trading, strategies, instruments, market, settings, health
+│   │   ├── api/v1/endpoints/    # auth, users, portfolios, trading, strategies, instruments, market, settings, broker_connections, health
 │   │   ├── core/                # config, database, redis, security
 │   │   ├── domain/              # enums (OrderSide/Type/Status, ExecutionMode, StrategyType/Status, etc.)
-│   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade, Strategy
+│   │   ├── models/              # User, RefreshToken, AuditLog, Portfolio, Instrument, Order, Position, Trade, Strategy, BrokerConnection
 │   │   ├── schemas/             # request/response Pydantic models
 │   │   ├── services/            # auth, users, portfolios, strategies, paper_engine, live_execution, market_data/upstox/quote_stream, broker/upstox_broker/broker_factory, audit
 │   │   └── repositories/        # data-access layer per entity
@@ -73,7 +73,8 @@ order APIs.
 **Phase: 4 — Live execution adapter. Item 1 (BrokerAdapter interface +
 Upstox/Mock adapters + factory) and item 2 (portfolio LIVE mode wired to the
 adapter) are DONE. Settings UI with the paper/live portfolio switch is DONE.
-Per-portfolio Strategies CRUD (backend + dashboard panel) is DONE. Paper engine
+Per-portfolio Strategies CRUD (backend + dashboard panel) is DONE. Per-user
+broker connections (Settings → "Add Upstox API") are DONE. Paper engine
 remains untouched as the source of truth.**
 
 All backend and frontend checks pass. The last commit is on `main`.
@@ -82,9 +83,21 @@ All backend and frontend checks pass. The last commit is on `main`.
 feature (user-feedback item 1): `strategies` table (migration `0005`), model +
 repository + service + schemas, CRUD API under `/portfolios/{id}/strategies`
 (tenant-scoped, duplicate-name 409), and a dashboard **Strategies** panel
-(add/edit/deactivate/delete per portfolio). Backend tests now **119 passing**;
-frontend typecheck/lint/build green. See "Session 2026-08-19 (Strategies)"
-under "What has been done".
+(add/edit/deactivate/delete per portfolio).
+
+Also added the full-stack **per-user broker connections** feature
+(user-feedback item 3 — "In Settings: option to add API / the broker"):
+`broker_connections` table (migration `0006`), model + repository + service +
+schemas, CRUD API under `/settings/broker` (tenant-scoped, masked-at-rest
+secrets via Fernet keyed off `SECRET_KEY`), a **Broker connection** card on
+the Settings page (add / update token / disconnect), and live-execution
+resolution through the user's own stored credentials
+(`broker_factory.get_broker_for_user`, used by `trading._execution_for`).
+
+Backend tests now **132 passing**; frontend typecheck/lint/build green; the
+migration chain `0001 → 0006` up/down/up verifies. See "Session 2026-08-19
+(Strategies)" and "Session 2026-08-19 (Broker connections)" under "What has
+been done".
 
 ## How to continue WITHOUT burning your token budget
 
@@ -109,7 +122,8 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 | Change market data | `backend/app/services/market_data.py` → `provider_factory.py` → `quote_stream.py` → `upstox.py` → `backend/app/api/v1/endpoints/market.py` |
 | DB schema change | `backend/app/models/<entity>.py` → `backend/alembic/versions/` (next revision) → `backend/app/repositories/<entity>.py` → add a test |
 | **Build Strategies feature** | DONE (2026-08-19): model `backend/app/models/strategy.py`, migration `0005`, repo `repositories/strategies.py`, service `services/strategies.py`, schemas `schemas/strategy.py`, API `api/v1/endpoints/strategies.py` (`/portfolios/{id}/strategies` CRUD), UI `frontend/src/components/strategies-panel.tsx` wired into the dashboard. Strategy engine/signals still NOT built. |
-| **Build Settings page (live/paper toggle + broker config)** | DONE (2026-08-19): page at `frontend/src/app/settings/page.tsx`, link in `dashboard-header.tsx`, endpoint `backend/app/api/v1/endpoints/settings.py` (`GET /settings/execution`). Broker token store (per-user) still NOT built — that is the next step below. |
+| **Build Settings page (live/paper toggle + broker config)** | DONE (2026-08-19): page at `frontend/src/app/settings/page.tsx`, link in `dashboard-header.tsx`, endpoint `backend/app/api/v1/endpoints/settings.py` (`GET /settings/execution`). Broker token store (per-user) is now DONE — see the next row. |
+| **Build per-user broker connections (Settings → add Upstox API)** | DONE (2026-08-19): model `backend/app/models/broker_connection.py`, migration `0006`, repo `backend/app/repositories/broker_connections.py`, service `backend/app/services/broker_connections.py`, schemas `backend/app/schemas/broker_connection.py`, API `backend/app/api/v1/endpoints/broker_connections.py` (`/settings/broker` CRUD), UI in `frontend/src/app/settings/page.tsx` (Broker connection card). Live execution resolves the user's stored adapter via `backend/app/services/broker_factory.py` `get_broker_for_user`, used by `trading.py:_execution_for`. Secrets are encrypted at rest (`core/security.encrypt_secret`/`decrypt_secret`, Fernet keyed off `SECRET_KEY`) and only ever returned masked. |
 
 ### File map (one line each)
 
@@ -119,7 +133,8 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 - `market_data.py` (188) — quote fetching/caching via provider abstraction.
 - `broker.py` (~110) — `BrokerAdapter` ABC + DTOs + `MockBrokerAdapter` (LIVE execution seam).
 - `upstox_broker.py` (~150) — Upstox v2 order placement adapter (`place`/`cancel`/`status`).
-- `broker_factory.py` (~25) — picks mock vs upstox from `BROKER_ADAPTER`.
+- `broker_factory.py` (56) — picks mock vs upstox from `BROKER_ADAPTER`; `get_broker_for_user` resolves a user's stored Upstox connection first, falling back to server config.
+- `broker_connections.py` (151) — per-user broker credential store (create/list/update/delete, encrypted at rest, masked read models, `resolve_adapter`).
 - `auth.py` (137) — register/login/refresh/logout logic.
 - `quote_stream.py` (136) — WebSocket quote streaming.
 - `upstox.py` (113) — Upstox REST provider (live quotes).
@@ -127,24 +142,25 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
 - `portfolios.py` (79), `instruments.py` (38), `users.py` (20), `audit.py` (36).
 
 **Backend API** (`backend/app/api/v1/endpoints/`)
-- `trading.py` (115) — Phase 3+4 endpoints (orders/positions/summary; dispatch by portfolio execution mode).
-- `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34), `settings.py` (17) — `GET /settings/execution` (auth) exposing non-secret execution config for the Settings UI.
-- `router.py` (20) — registers all routers.
+- `trading.py` (115) — Phase 3+4 endpoints (orders/positions/summary; dispatch by portfolio execution mode; live adapter resolved per-user).
+- `portfolios.py` (61), `auth.py` (149), `market.py` (102), `instruments.py` (42), `users.py` (12), `health.py` (34), `settings.py` (38) — `GET /settings/execution` (auth) exposing non-secret execution config incl. `broker_connected`.
+- `broker_connections.py` (61) — `/settings/broker` CRUD (auth, tenant-scoped).
+- `router.py` (26) — registers all routers incl. broker_connections.
 
 **Backend core** (`backend/app/core/`)
 - `config.py` (94) — all env settings (incl. `PAPER_MATCHER_*`).
 - `security.py` (56), `database.py` (23), `redis.py` (20), `rate_limit.py` (88).
 
-**Backend models** (`backend/app/models/`) — `order.py` (71), `position.py` (73), `trade.py` (73), `portfolio.py` (59), `instrument.py` (58), `user.py` (53), `refresh_token.py` (42), `audit_log.py` (38). Each is a plain SQLAlchemy table.
+**Backend models** (`backend/app/models/`) — `order.py` (71), `position.py` (73), `trade.py` (73), `portfolio.py` (59), `instrument.py` (58), `user.py` (53), `refresh_token.py` (42), `audit_log.py` (38), `broker_connection.py` (65). Each is a plain SQLAlchemy table.
 
 **Backend schemas** (`backend/app/schemas/`) — thin Pydantic DTOs, 15-52 lines each.
 
-**Backend tests** (`backend/tests/`) — read as spec: `test_paper_engine.py` (272), `test_trading_api.py` (188), `test_portfolios.py` (140), `test_market_ws.py` (90), others smaller. `conftest.py` (75) = fixtures; `helpers.py` (29) = `register_user`/`auth_headers`.
+**Backend tests** (`backend/tests/`) — read as spec: `test_paper_engine.py` (272), `test_trading_api.py` (188), `test_portfolios.py` (140), `test_market_ws.py` (90), `test_broker_connections.py` (245), others smaller. `conftest.py` (75) = fixtures; `helpers.py` (29) = `register_user`/`auth_headers`.
 
 **Frontend** (`frontend/src/`)
-- `lib/api.ts` (253) — typed API client; every backend call goes through here.
+- `lib/api.ts` (405) — typed API client; every backend call goes through here (incl. broker-connection CRUD).
 - `lib/auth.tsx` (97), `lib/use-market-stream.ts` (203).
-- `app/settings/page.tsx` (~250) — Settings page: per-portfolio paper/live switch (confirm on paper→live) + read-only Execution config card.
+- `app/settings/page.tsx` (~566) — Settings page: per-portfolio paper/live switch (confirm on paper→live) + read-only Execution config card + Broker connection card (add/update token/disconnect, masked previews).
 - `components/trading-panel.tsx` (517) — trade ticket + positions/orders UI.
 - `components/market-quotes-card.tsx` (300), `portfolios-section.tsx` (196), `instrument-search.tsx` (131), `stat-cards.tsx` (78), `dashboard-header.tsx` (54, now has Settings link).
 - `app/dashboard/page.tsx` (157) — wires everything; `app/page.tsx` (240) = landing.
@@ -278,13 +294,52 @@ frontend). **Do NOT read everything.** Read only the files your task touches.
   config reflection via monkeypatch) — **109 total passing**; ruff clean;
   frontend typecheck/lint/build green (new `/settings` route generated).
 
+### Session 2026-08-19 — per-user broker connections (user-feedback item 3)
+Full-stack "add your Upstox API in Settings" — the per-user broker token store
+the previous session left as the next step.
+
+- Migration `0006` `broker_connections`: id, `user_id` (FK CASCADE, indexed),
+  `provider` (default `upstox`), `label`, `access_token_encrypted`,
+  `api_key_encrypted`, `is_active`, timestamps. SQLite-compatible.
+- New `app/models/broker_connection.py`, `app/repositories/broker_connections.py`
+  (list/get/active-for-provider/create), `app/services/broker_connections.py`
+  (`BrokerConnectionService`: CRUD, max 5 connections/user, encrypted-at-rest
+  secrets, masked read models), `app/schemas/broker_connection.py`
+  (`BrokerConnectionCreate/Update/Read` + `mask_secret`, `****<last4>`).
+- Secret storage: `app/core/security.encrypt_secret`/`decrypt_secret` — Fernet
+  keyed deterministically off `SECRET_KEY` (rotation invalidates stored secrets;
+  noted in `.env.example`). Never returned by the API.
+- API `app/api/v1/endpoints/broker_connections.py` under `/settings/broker`
+  (all auth + tenant-scoped): `GET ""` list, `POST ""` create, `PATCH /{id}`,
+  `DELETE /{id}` → 204. `GET /settings/execution` now also returns
+  `broker_connected` (whether the user has an active Upstox connection).
+- Execution resolution: `broker_factory.get_broker_for_user(db, user_id)`
+  returns a live `UpstoxBrokerAdapter` built from the user's stored credentials
+  (active connection wins) falling back to the server-configured `get_broker()`.
+  `trading.py:_execution_for` now uses it for live portfolios, and rejects live
+  orders with a "add your Upstox API in Settings" hint when the resolved adapter
+  is mock.
+- Frontend: Settings page gained a "Broker connection" card — list connections
+  (masked token/api preview, connected/inactive badge), add form (label, access
+  token, api key), update-token inline, disconnect with confirmation; `api.ts`
+  added `listBrokerConnections/createBrokerConnection/updateBrokerConnection/
+  deleteBrokerConnection`; Execution card shows "Upstox (your account)" when
+  `broker_connected`.
+- Tests: 13 new in `tests/test_broker_connections.py` (auth required, masked
+  reads, encryption round-trip + at-rest, tenant isolation, update/deactivate/
+  delete, max-connections 409, short-token 422, `broker_connected` reflection,
+  live order through the user's stored connection via a fake adapter,
+  live order rejected without a connection) — **132 total passing**; ruff clean;
+  migration `0001 → 0006` up/down/up verified; frontend typecheck/lint/build
+  green.
+
 ## Verification commands
 
 ```bash
 # Backend (from backend/)
 cd backend
 ruff check app tests
-python3 -m pytest -q          # expect 109 passed
+python3 -m pytest -q          # expect 132 passed
 # migration up/down/up on SQLite:
 DATABASE_URL=sqlite:////tmp/t.db alembic upgrade head && \
 DATABASE_URL=sqlite:////tmp/t.db alembic downgrade base && \
@@ -339,33 +394,34 @@ Notes:
 > **PRIORITY LIST from user feedback (2026-08-17, preview session).**
 > The user previewed the app and reported it feels like "just a simple page —
 > create portfolio + refresh mock data". They explicitly asked for the
-> following, in their own words. **Item 2 is now DONE (2026-08-19).**
+> following, in their own words. **Items 2 and 3 are now DONE (2026-08-19).**
 >
 > 1. **A strategies bar where I can manually add or edit strategies for each
->    portfolio.** → Build a per-portfolio `strategies` feature (new DB model +
->    migration `0005`, CRUD API under `/portfolios/{id}/strategies`, and a UI
->    panel on the dashboard to add/edit/delete strategies). This does NOT exist
->    yet anywhere in the codebase.
+>    portfolio.** → ✅ DONE (2026-08-19): per-portfolio `strategies` model
+>    (migration `0005`), CRUD API under `/portfolios/{id}/strategies`, and a
+>    dashboard Strategies panel (add/edit/deactivate/delete). Strategy
+>    engine/signals NOT built (roadmap Phase 7).
 > 2. **In Settings: option to switch between live mode and paper trading mode.**
 >    → ✅ DONE (2026-08-19): Settings page at `/settings` with a per-portfolio
 >    Paper/Live switch (confirm on paper→live), wired to the existing
 >    `PATCH /portfolios/{id}` `execution_mode`; Settings link in the dashboard
 >    header; `GET /settings/execution` exposes live availability. Live is
 >    gated server-side by `LIVE_EXECUTION_ENABLED`.
-> 3. **In Settings: option to add API / the broker.** → **NEXT.** Decide scope:
->    per-user broker access-token storage (new model + masked-at-rest, selected
->    per user in `broker_factory`/`_execution_for`) vs. read-only status of the
->    server-configured `BROKER_ADAPTER`. Recommend the per-user token store so
->    "add your Upstox API" is real. Note `get_broker()` currently resolves a
->    SINGLE global adapter from env — a per-user token means threading the
->    user's stored token through `trading.py:_execution_for` and
->    `upstox_broker.UpstoxBrokerAdapter`.
+> 3. **In Settings: option to add API / the broker.** → ✅ DONE (2026-08-19):
+>    per-user broker connections (`broker_connections` migration `0006`,
+>    `/settings/broker` CRUD, encrypted-at-rest tokens, masked previews), a
+>    "Broker connection" card on the Settings page, and live execution through
+>    the user's own stored Upstox account via
+>    `broker_factory.get_broker_for_user`. A real Upstox **OAuth connection
+>    flow** (auth-code exchange, token refresh) is still out of scope — tokens
+>    are entered manually as long-lived access tokens (see Phase 4 remaining
+>    items below).
 > 4. **Order placing / paper fills are not discoverable** — the `TradingPanel`
 >    exists and works (trade ticket, positions, orders, fills, cancel) but sits
 >    below the fold on `/dashboard` behind the portfolios/quotes grid. Consider
 >    tabbed/nav structure on the dashboard so trading is front and center, and
 >    a visible Register entry point (register page already exists at `/register`;
->    the user did not see it).
+>    the user did not see it). **NEXT.**
 > 5. **Remove/hide backend-health diagnostics from the user dashboard.** The
 >    "Platform" stat (shows `Degraded` because Redis is absent in the sandbox)
 >    and arguably the "Data mode" stat are dev-facing noise, not user features:
@@ -383,9 +439,11 @@ Notes:
 >    for auto-placement; a manual/automated switch is needed — the user must be
 >    able to turn autotrade on/off per portfolio.
 >
-> Suggested execution order: ~~Settings page + header link~~ (DONE) → Strategies
-> feature (full stack) → broker token store + autotrade flag → dashboard
-> diagnostic cleanup. Update this file + README in the same commit as always.
+> Suggested execution order: ~~Settings page + header link~~ (DONE) →
+> ~~Strategies feature (full stack)~~ (DONE) → ~~broker token store~~ (DONE) →
+> dashboard discoverability/register entry point (item 4) → dashboard
+> diagnostic cleanup (item 5) → autotrade flag (item 6). Update this file +
+> README in the same commit as always.
 
 **Phase 4 remaining open items** (from the original roadmap, still valid but
 lower priority than the user's new requests above), in suggested order:

@@ -71,6 +71,14 @@ paper/live switch.**
     server-side by `LIVE_EXECUTION_ENABLED`) plus a read-only Execution card
     showing the configured broker adapter, market-data provider and live
     availability; linked from the dashboard header
+  - **Per-user broker connections** (Settings → "Broker connection"): users
+    add their own Upstox API credentials, stored **encrypted at rest**
+    (Fernet keyed off `SECRET_KEY`) and never returned — only masked previews
+    (`****abcd`). CRUD API under `/api/v1/settings/broker` (tenant-scoped,
+    max 5 connections/user). Live portfolios resolve the executing broker
+    adapter from the current user's stored connection first
+    (`broker_factory.get_broker_for_user`), falling back to the
+    server-configured `BROKER_ADAPTER`.
   - Reverse proxy: `/api/*` → backend (no CORS issues, single entry point)
   - Light + dark themes, responsive layout
 - **Deployment**
@@ -217,14 +225,20 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   and any key shorter than 32 characters.
 - CSRF: the API is bearer-token based (no cookie-authenticated state-changing
   requests), so CSRF protection applies once cookie-based flows are introduced.
-- No broker credentials are stored or handled anywhere yet; Upstox credentials
-  are provided via environment configuration only.
-  - Portfolio ownership is enforced server-side (never trusted from the request
-    body); a user cannot read or mutate another tenant's portfolios.
-  - Settings: `GET /settings/execution` (authenticated) exposes non-secret
-    execution config (broker adapter, market-data provider, whether live
-    portfolios are enabled) for the Settings UI — credentials are never
-    returned.
+- Per-user broker credentials (Upstox access token / API key) are stored
+  **encrypted at rest** using Fernet keyed deterministically off `SECRET_KEY`
+  (see `backend/app/core/security.py`). They are never returned by any API —
+  only masked previews (`****abcd`). Rotating `SECRET_KEY` invalidates stored
+  broker secrets; the user must re-enter them.
+- No broker credentials are stored or handled anywhere except the encrypted
+  `broker_connections` store; server-side Upstox credentials are provided via
+  environment configuration only.
+- Portfolio ownership is enforced server-side (never trusted from the request
+  body); a user cannot read or mutate another tenant's portfolios.
+- Settings: `GET /settings/execution` (authenticated) exposes non-secret
+  execution config (broker adapter, market-data provider, whether live
+  portfolios are enabled) for the Settings UI — credentials are never
+  returned.
 - All market data is labelled with `is_mock`/`source`; the provider abstraction
   ensures real feeds cannot be mistaken for mock data. The default provider is
   mock; live Upstox data activates only when explicitly configured.
@@ -257,8 +271,10 @@ cd frontend && npm run typecheck && npm run lint && npm run build
   requested a per-portfolio **strategies bar** (manually add/edit strategies)
   and an **autotrade** toggle in Settings so strategies can auto-place orders
   through the chosen execution mode (paper/live); see `HANDOVER.md` "Next step".
-  The Settings page and paper/live switch are implemented; the strategies bar,
-  autotrade flag and per-user broker token store are not.
+  The Settings page, paper/live switch and per-user broker connections are
+  implemented; the strategies bar (backend CRUD + dashboard panel) is
+  implemented but no strategy engine/signals exist yet, and the autotrade flag
+  is not.
 - Rate limiting falls back to in-memory when Redis is unreachable (single-node
   only; not for multi-instance deployments).
 
@@ -370,4 +386,13 @@ sudo docker compose exec backend python -m app.seed
    the broker adapter for that portfolio.
 6. The Execution card shows the configured broker adapter (Mock/Upstox), market
    data provider, and live availability. No secrets/credentials are displayed.
-7. Unauthenticated `GET /api/v1/settings/execution` → 401.
+7. **Broker connection** card: add an Upstox access token (+ optional label and
+   API key) → it appears with `****<last4>` masked preview and a `connected`
+   badge; the Execution card's broker row now reads `Upstox (your account)`.
+8. **Update token** on a connection → the masked preview changes; **Disconnect**
+   asks for confirmation → the connection is removed and the Execution card
+   falls back to the server-configured adapter.
+9. Unauthenticated `GET /api/v1/settings/execution` and
+   `GET /api/v1/settings/broker` → 401.
+10. Secrets are never returned: the API responses contain only
+    `access_token_masked`/`api_key_masked` fields.

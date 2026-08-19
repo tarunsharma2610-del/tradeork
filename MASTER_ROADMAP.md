@@ -4,7 +4,7 @@
 >
 > **Token-saving rule:** Do NOT scan the entire repository just to rediscover project status. Use these three documents first, then inspect only files relevant to the current phase/task.
 >
-> **Current overall estimate:** ~68% of the intended product vision.
+> **Current overall estimate:** ~70% of the intended product vision.
 >
 > **Current phase:** Phase 4 — Live Broker Execution.
 
@@ -184,10 +184,10 @@ Never call a feature complete merely because code or a UI exists.
 - [x] Live execution tests
 
 ### Finish Phase 4
-- [ ] User-specific broker account connections
-- [ ] Broker account database model
-- [ ] Encrypted broker token/credential storage
-- [ ] User → broker account → portfolio ownership model
+- [x] User-specific broker account connections (2026-08-19)
+- [x] Broker account database model (`broker_connections`, migration `0006`)
+- [x] Encrypted broker token/credential storage (Fernet keyed off `SECRET_KEY`, masked reads)
+- [x] User → broker account → portfolio ownership model (tenant-scoped `/settings/broker`)
 - [ ] Upstox OAuth connection flow
 - [ ] Automatic token lifecycle/refresh where supported
 - [ ] Broker reconnect/disconnect handling
@@ -441,8 +441,8 @@ Events:
 ### SaaS/account
 - [x] Trading settings (per-portfolio paper/live switch) — Settings page at `/settings` (2026-08-19); live gated by `LIVE_EXECUTION_ENABLED`
 - [x] Read-only execution config (broker adapter / market-data provider / live availability via `GET /settings/execution`)
+- [x] Broker settings — per-user broker connection CRUD (`/settings/broker`, migration `0006`, encrypted-at-rest tokens, Settings UI card; 2026-08-19). OAuth connect flow and token refresh pending (Phase 4).
 - [ ] Account settings
-- [ ] Broker settings (connect/disconnect + per-user token store — Settings page exists, connection UI pending)
 - [ ] Risk settings
 - [ ] Notification settings
 - [ ] Session/device management
